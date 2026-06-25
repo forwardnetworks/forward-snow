@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "audit:servicenow": "python3 scripts/audit_servicenow_admin_readiness.py",
+    "verify:forward": "python3 scripts/verify_forward_integrations.py",
+    "verify:servicenow": "node scripts/verify_servicenow_portal.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

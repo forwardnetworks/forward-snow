@@ -1,0 +1,147 @@
+/**
+ * @intent Forward ServiceNow demo CMDB Netgear CI fields
+ * @description Demo-compatible ServiceNow CMDB Netgear CI export. Derived from Forward's stock /External/ServiceNow/CMDB Netgear CI query, with Device Type converted to a string for stock PDI compatibility.
+ */
+
+domainRegex = re`^[^.]+\.(?<Domain>.+)`;
+
+emptyMacList =
+  foreach n in fromTo(1, 0)
+  select null : MacAddress;
+
+getL3Interfaces(device: Device) =
+  foreach iface in device.interfaces
+  foreach ifaceIpInfo
+    in getSvis(iface) + getSubIfaces(iface) + getBridges(iface) +
+       getTunnels(iface)
+  select {
+    name: ifaceIpInfo.name,
+    adminStatus: ifaceIpInfo.adminStatus,
+    operStatus: ifaceIpInfo.operStatus,
+    ipv4: ifaceIpInfo.ipv4,
+    ipv6: ifaceIpInfo.ipv6,
+    vrf: ifaceIpInfo.vrf,
+    vlan: ifaceIpInfo.vlan,
+    acls: ifaceIpInfo.acls,
+    iface,
+    subIface: ifaceIpInfo.subIface
+  };
+
+getSubIfaces(iface) =
+  foreach subIface in iface.subinterfaces
+  select {
+    name: subIface.name,
+    adminStatus: subIface.adminStatus,
+    operStatus: subIface.operStatus,
+    ipv4: subIface.ipv4,
+    ipv6: subIface.ipv6,
+    vrf: subIface.networkInstanceName,
+    vlan: if isPresent(subIface.vlan)
+          then when subIface.vlan is VLAN_ID(v) -> v; otherwise -> null : Integer
+          else null : Integer,
+    acls: subIface.acls,
+    subIface
+  };
+
+getSvis(iface) =
+  foreach x in [1]
+  where isPresent(iface.routedVlan)
+  select {
+    name: iface.name,
+    adminStatus: iface.adminStatus,
+    operStatus: iface.operStatus,
+    ipv4: iface.routedVlan.ipv4,
+    ipv6: iface.routedVlan.ipv6,
+    vrf: iface.routedVlan.networkInstanceName,
+    vlan: iface.routedVlan.vlan,
+    acls: iface.acls,
+    subIface: null : SubInterface
+  };
+
+getBridges(iface) =
+  foreach x in [1]
+  where isPresent(iface.bridge)
+  select {
+    name: iface.name,
+    adminStatus: iface.adminStatus,
+    operStatus: iface.operStatus,
+    ipv4: iface.bridge.ipv4,
+    ipv6: iface.bridge.ipv6,
+    vrf: iface.bridge.networkInstanceName,
+    vlan: iface.bridge.vlan,
+    acls: iface.acls,
+    subIface: null : SubInterface
+  };
+
+getTunnels(iface) =
+  foreach x in [1]
+  where isPresent(iface.tunnel)
+  select {
+    name: iface.name,
+    adminStatus: iface.adminStatus,
+    operStatus: iface.operStatus,
+    ipv4: iface.tunnel.ipv4,
+    ipv6: iface.tunnel.ipv6,
+    vrf: iface.tunnel.networkInstanceName,
+    vlan: null : Integer,
+    acls: iface.acls,
+    subIface: null : SubInterface
+  };
+
+findIfaceMacs(device, ips) =
+  if length(ips) == 0
+  then emptyMacList
+  else (foreach iface in getL3Interfaces(device)
+        let mac = iface.iface.ethernet.macAddress
+        where isPresent(mac)
+        let addrs = iface.ipv4.addresses + iface.ipv6.addresses
+        where length(addrs) > 0 &&
+              max(foreach addr in addrs
+                  select addr.ip in ips)
+        select distinct mac);
+
+foreach device in network.devices
+  let totalSpeedMbps = sum(foreach interface in device.interfaces
+                           let ethernet = interface.ethernet
+                           where isPresent(ethernet.speedMbps)
+                           select ethernet.speedMbps)
+
+  let numEthPorts = length(foreach interface in device.interfaces
+                           where interface.interfaceType == IfaceType.IF_ETHERNET
+                           select interface)
+  where numEthPorts != 0
+
+  where isPresent(device.system.hostNames)
+  let fqdn = max(device.system.hostNames)
+  where isPresent(fqdn)
+  let interfaceCount = length(device.interfaces)
+  let snapshotInfo = device.snapshotInfo
+  foreach domainMatch in regexMatches(fqdn, domainRegex)
+
+  let serialNumbers = (
+    foreach c in device.platform.components
+    where c.partType == DevicePartType.CHASSIS
+    select c.serialNumber
+  )
+
+  let managementMacs = findIfaceMacs(device, device.platform.managementIps)
+  let collectionMacs = findIfaceMacs(device, [device.snapshotInfo.collectionIp])
+
+select {
+  "Manufacturer": device.platform.vendor,
+  "Serial Number": min(serialNumbers),
+  "Model ID": device.platform.model,
+  "Name": device.name,
+  "Location": device.locationName,
+  "Fully Qualified Domain Name": max(device.system.hostNames),
+  "Most Recent Discovery": snapshotInfo.collectionTime,
+  "DNS Domain": domainMatch.data.Domain,
+  "MAC Address: Management": min(managementMacs),
+  "MAC Address: Collection": min(collectionMacs),
+  "IP Address: Management": min(device.platform.managementIps),
+  "IP Address: Collection": device.snapshotInfo.collectionIp,
+  "Device Type": toString(device.platform.deviceType),
+  "Ports": numEthPorts,
+  "Estimated Bandwidth": totalSpeedMbps,
+  "Physical Interface Count": interfaceCount
+}
