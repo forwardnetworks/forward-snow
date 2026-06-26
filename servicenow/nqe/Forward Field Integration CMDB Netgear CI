@@ -1,6 +1,6 @@
 /**
- * @intent Forward ServiceNow demo CMDB Netgear CI fields
- * @description Demo-compatible ServiceNow CMDB Netgear CI export. Derived from Forward's stock /External/ServiceNow/CMDB Netgear CI query, with Device Type converted to a string for stock PDI compatibility.
+ * @intent Forward ServiceNow field integration CMDB Netgear CI fields
+ * @description ServiceNow CMDB Netgear CI export for the Forward field integration. Derived from Forward's stock /External/ServiceNow/CMDB Netgear CI query, with Device Type converted to a string for stock lab-instance compatibility.
  */
 
 domainRegex = re`^[^.]+\.(?<Domain>.+)`;

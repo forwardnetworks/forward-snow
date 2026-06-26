@@ -1,6 +1,8 @@
 # Production Readiness Notes
 
-This package is still demo scaffolding, but these settings make it safer for a production-style pilot. Use `admin-runbook.md` as the operational checklist.
+Use this checklist with `admin-runbook.md` before installing the Forward field integration in a production-managed ServiceNow instance.
+
+This is field integration code, not a supported Forward product or standard platform feature. The controls below are intended to make the integration installable, auditable, and operable by ServiceNow admins.
 
 ## Credentials
 

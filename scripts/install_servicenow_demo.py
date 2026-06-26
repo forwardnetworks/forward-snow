@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Install or update the Forward ServiceNow workflow demo in one PDI.
+"""Install or update the Forward ServiceNow field integration.
 
 The installer is intentionally idempotent. It uses ServiceNow's Table API to
-create missing schema records and patch existing demo records in place.
+create missing schema records and patch existing integration records in place.
 """
 
 from __future__ import annotations
@@ -24,8 +24,9 @@ TICKET_TABLE = "u_forward_connectivity_ticket"
 HOP_TABLE = "u_forward_connectivity_hop"
 BINDING_TABLE = "u_forward_tenant_binding"
 CHANGE_VALIDATION_TABLE = "u_forward_change_validation"
-WIDGET_NAME = "Forward Workflow Demo"
+WIDGET_NAME = "Forward Field Integration"
 WIDGET_ID = "forward-workflow-demo"
+LEGACY_WIDGET_NAMES = ("Forward Workflow Demo",)
 PAGE_ID = "connectivity_ticket"
 EVENT_NAME = "x_fwd_demo.analyze_ticket"
 DEFAULT_FORWARD_BASE_URL = "https://fwd.app/api"
@@ -439,7 +440,7 @@ def ensure_properties(client: ServiceNowClient, network_id: str, forward_base_ur
         client.upsert(
             "sys_properties",
             f"name={name}",
-            {"name": name, "value": value, "type": "string", "description": "Forward workflow demo"},
+            {"name": name, "value": value, "type": "string", "description": "Forward ServiceNow field integration"},
             f"property {name}",
         )
 
@@ -449,7 +450,7 @@ def ensure_groups(client: ServiceNowClient) -> None:
         client.upsert(
             "sys_user_group",
             f"name={name}",
-            {"name": name, "active": "true", "description": "Forward workflow demo routing group"},
+            {"name": name, "active": "true", "description": "Forward ServiceNow field integration routing group"},
             f"group {name}",
         )
 
@@ -471,7 +472,7 @@ def ensure_scripts(client: ServiceNowClient) -> None:
                 "active": "true",
                 "client_callable": "false",
                 "access": "public",
-                "description": "Forward workflow demo helper",
+                "description": "Forward ServiceNow field integration helper",
             },
             f"Script Include {name}",
         )
@@ -484,8 +485,8 @@ def ensure_event(client: ServiceNowClient) -> None:
         {
             "event_name": EVENT_NAME,
             "table": TICKET_TABLE,
-            "description": "Forward demo: analyze connectivity ticket",
-            "fired_by": "Forward Workflow Demo",
+            "description": "Forward field integration: analyze connectivity ticket",
+            "fired_by": WIDGET_NAME,
             "priority": "100",
             "queue": "default",
         },
@@ -508,7 +509,7 @@ def ensure_event(client: ServiceNowClient) -> None:
 def ensure_portal(client: ServiceNowClient) -> None:
     widget_sys_id = client.upsert(
         "sp_widget",
-        f"name={WIDGET_NAME}",
+        f"id={WIDGET_ID}",
         {
             "name": WIDGET_NAME,
             "id": WIDGET_ID,
@@ -520,7 +521,7 @@ def ensure_portal(client: ServiceNowClient) -> None:
             "data_table": "sp_instance",
             "category": "custom",
             "public": "false",
-            "description": "Art-of-possible Forward workflow demo for ServiceNow",
+            "description": "Forward ServiceNow field integration",
         },
         f"widget {WIDGET_NAME}",
     )
@@ -532,7 +533,7 @@ def ensure_portal(client: ServiceNowClient) -> None:
             "title": WIDGET_NAME,
             "category": "custom",
             "public": "false",
-            "short_description": "Forward workflow demo page",
+            "short_description": "Forward ServiceNow field integration page",
         },
         f"page {PAGE_ID}",
     )
@@ -584,6 +585,8 @@ def ensure_portal(client: ServiceNowClient) -> None:
 def forward_widget_sys_ids(client: ServiceNowClient, canonical_widget_sys_id: str = "") -> list[str]:
     ids = [canonical_widget_sys_id]
     ids.extend(query_ids(client, "sp_widget", f"name={WIDGET_NAME}"))
+    for legacy_name in LEGACY_WIDGET_NAMES:
+        ids.extend(query_ids(client, "sp_widget", f"name={legacy_name}"))
     ids.extend(query_ids(client, "sp_widget", f"id={WIDGET_ID}"))
     return unique_ids(ids)
 
@@ -780,7 +783,7 @@ def main() -> int:
         assert_production_binding(client, tenant_username)
     if not dry_run:
         verify(client)
-    print("ServiceNow demo install complete")
+    print("ServiceNow field integration install complete")
     print(f"Portal URL: {instance_url}/sp?id={PAGE_ID}")
     return 0
 

@@ -56,7 +56,7 @@ async function maybeLogin(page, portalUrl, username, password) {
 }
 
 async function waitForWidgetReady(page) {
-  await page.waitForSelector("text=Forward Workflow Demo for ServiceNow", { timeout: 60000 });
+  await page.waitForSelector("text=Forward Field Integration for ServiceNow", { timeout: 60000 });
   await page.locator(".fwd-status-card").first().waitFor({ state: "visible", timeout: 60000 });
 
   const error = await page
@@ -255,21 +255,21 @@ async function main() {
       throw new Error(`expected change validation to pass, got ${result.validationStatus}`);
     }
 
-    result.screenshot = path.join(outputDir, "servicenow-demo-verified.png");
+    result.screenshot = path.join(outputDir, "servicenow-field-integration-verified.png");
     await page.screenshot({ path: result.screenshot, fullPage: true });
     fs.writeFileSync(
-      path.join(outputDir, "servicenow-demo-result.json"),
+      path.join(outputDir, "servicenow-field-integration-result.json"),
       JSON.stringify(result, null, 2),
     );
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
-    const failedScreenshot = path.join(outputDir, "servicenow-demo-failed.png");
-    const failedHtml = path.join(outputDir, "servicenow-demo-failed.html");
+    const failedScreenshot = path.join(outputDir, "servicenow-field-integration-failed.png");
+    const failedHtml = path.join(outputDir, "servicenow-field-integration-failed.html");
     await page.screenshot({ path: failedScreenshot, fullPage: true }).catch(() => {});
     fs.writeFileSync(failedHtml, await page.content().catch(() => ""));
     result.screenshot = failedScreenshot;
     fs.writeFileSync(
-      path.join(outputDir, "servicenow-demo-result.json"),
+      path.join(outputDir, "servicenow-field-integration-result.json"),
       JSON.stringify({ ...result, error: err && err.message ? err.message : String(err) }, null, 2),
     );
     throw err;

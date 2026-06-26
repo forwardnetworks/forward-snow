@@ -751,7 +751,7 @@
       var groupSysId = groupForTeam(team);
       if (groupSysId) ticket3.assignment_group = groupSysId;
       setIfValid(ticket3, "u_recommended_team", team || "triage");
-      ticket3.work_notes = "Manually routed via Forward workflow demo.";
+      ticket3.work_notes = "Manually routed via Forward field integration.";
       ticket3.update();
       data.ticket = serializeTicket(ticket3);
       return;
@@ -786,7 +786,7 @@
       var incidentSysId = inc.insert();
       setIfValid(ticket4, "u_incident", incidentSysId);
       setIfValid(ticket4, "u_incident_number", String(inc.number || ""));
-      ticket4.work_notes = "Created ServiceNow incident " + String(inc.number || "") + " from Forward workflow demo.";
+      ticket4.work_notes = "Created ServiceNow incident " + String(inc.number || "") + " from Forward field integration.";
       ticket4.update();
       data.incidentSysId = String(incidentSysId);
       data.incidentNumber = String(inc.number || "");

@@ -1,113 +1,288 @@
-# Forward ServiceNow Workflow Demo
+# Forward ServiceNow Field Integration
 
-This is an art-of-possible demo package for ServiceNow. It shows how a ServiceNow-driven workflow could call Forward APIs, enrich ServiceNow CIs, create workflow tickets/incidents, validate Change Requests, and sync CMDB data from a Forward snapshot.
+Forward ServiceNow Field Integration connects ServiceNow workflows with Forward network evidence. ServiceNow remains the workflow system of record; Forward supplies digital-twin path analysis, snapshot evidence, CMDB data, and Change Request validation artifacts.
 
-This is not a Forward product feature. Treat it as experimental customer-testable scaffolding.
+![ServiceNow field integration overview](docs/assets/servicenow-field-integration-overview.png)
 
-## Contents
+## Support Boundary
 
-- `servicenow/assets/`: ServiceNow scripts, Service Portal widget assets, and helper classes.
-- `servicenow/setup/schema.md`: required ServiceNow tables, fields, choices, and properties.
-- `servicenow/setup/install.md`: ServiceNow install checklist.
-- `servicenow/setup/production.md`: production-style credential, egress, and verification notes.
-- `servicenow/setup/admin-runbook.md`: ServiceNow admin runbook for production-like installs, audits, operations, and rollback.
-- `scripts/install_servicenow_demo.py`: idempotent ServiceNow-side schema, asset, portal, and tenant-binding installer.
-- `scripts/configure_forward_integrations.py`: standalone Forward-side ticketing and CMDB configuration.
-- `scripts/audit_servicenow_admin_readiness.py`: read-only SNOW admin audit for credential, portal, property, table, and init readiness.
-- `scripts/verify_forward_integrations.py`: Forward-side proof for ServiceNow ticketing/CMDB status, with optional CMDB push.
-- `scripts/verify_servicenow_portal.js`: Playwright browser proof for login, path analysis, workflow ticket creation, and incident creation.
+This repository is a Forward field integration package. It is not a supported Forward product, packaged app, or standard platform feature. Treat it as customer-installable integration code that field teams and ServiceNow admins can deploy, audit, operate, and adapt under the customer's normal change-control process.
 
-## Production Posture
+## What It Installs
 
-For production-like installs, create a ServiceNow Basic Auth Profile that contains the Forward API access key and secret, then run the installer with `SN_PRODUCTION_MODE=1` and `SN_FORWARD_AUTH_PROFILE_SYS_ID`. The tenant binding will reference that auth profile instead of storing the Forward secret directly in the demo table.
+- ServiceNow custom task tables for Forward connectivity tickets and Change Request validations.
+- ServiceNow Script Includes that call the Forward API with bounded timeout and base-URL allowlisting.
+- A Service Portal page and widget for path analysis, incident creation, routing, and Change Request validation.
+- ServiceNow system properties, routing groups, and tenant bindings.
+- A Forward ServiceNow ticketing integration.
+- A Forward ServiceNow CMDB integration scoped to one Forward network.
+- An org-scoped Forward NQE query for ServiceNow CMDB Netgear CI export.
 
-When `SN_PRODUCTION_MODE=1`, the installer refuses `FORWARD_USERNAME` / `FORWARD_PASSWORD` fallback credentials and verifies that the binding uses an auth profile. Without production mode, the installer keeps the PDI-friendly fallback and writes `FORWARD_USERNAME` / `FORWARD_PASSWORD` into `u_forward_tenant_binding`. New installs create `u_forward_password` as a two-way encrypted ServiceNow password field; existing string fields are left in place and reported with a warning.
+## Repository Layout
 
-Forward calls are restricted to `x_fwd_demo.forward.allowed_base_urls`, defaulting to `https://fwd.app/api`, and use `x_fwd_demo.forward.request_timeout_ms`, defaulting to 30000 ms.
+| Path | Purpose |
+| --- | --- |
+| `servicenow/assets/` | ServiceNow Script Includes, Service Portal widget, client script, server script, and CSS. |
+| `servicenow/setup/admin-runbook.md` | ServiceNow admin install, audit, operations, and rollback runbook. |
+| `servicenow/setup/forward-install.md` | Forward ticketing and CMDB install guide. |
+| `servicenow/setup/install.md` | Manual ServiceNow install checklist. |
+| `servicenow/setup/production.md` | Production credential, egress, access-control, and rollback notes. |
+| `servicenow/setup/schema.md` | Tables, fields, choices, and system properties. |
+| `servicenow/nqe/` | Forward NQE source for CMDB export. |
+| `scripts/install_servicenow_demo.py` | Idempotent ServiceNow installer. Name retained for compatibility. |
+| `scripts/configure_forward_integrations.py` | Idempotent Forward ticketing and CMDB installer. |
+| `scripts/audit_servicenow_admin_readiness.py` | Read-only ServiceNow admin readiness audit. |
+| `scripts/verify_forward_integrations.py` | Read-only Forward integration verifier, with optional CMDB push proof. |
+| `scripts/verify_servicenow_portal.js` | Browser verifier for portal workflow proof. |
 
-Run `npm run audit:servicenow` after install and after any portal, credential, or property change. The audit is read-only and fails when direct Forward credentials remain in tenant bindings, when the portal has duplicate widget instances, when the widget/page is public, or when Forward init cannot return networks.
+## Production-Ready Defaults
 
-## Forward CMDB Contract
-
-By default, the CMDB integration installs an org-scoped Forward NQE query:
-
-`/ServiceNow/Forward Workflow Demo CMDB Netgear CI`
-
-The packaged query is derived from Forward's stock library query `/External/ServiceNow/CMDB Netgear CI`. The demo query converts `Device Type` to a string so a stock ServiceNow PDI can map it to `cmdb_ci_netgear.device_type`. This lets the demo map all 13 CMDB fields without modifying the Forward source tree.
-
-Set `USE_STOCK_NQE=1` to use the unmodified Forward stock query instead. In stock-query mode, the script omits `Device Type` because the stock query emits that column as an enum while a stock ServiceNow PDI exposes `cmdb_ci_netgear.device_type` as a string.
-
-## Quick Start
-
-1. Install or update the ServiceNow-side objects in production mode:
+Production mode is explicit:
 
 ```bash
-export SN_INSTANCE_URL='https://devXXXXX.service-now.com'
-export SN_USERNAME='admin'
-export SN_PASSWORD='...'
-export SN_TENANT_USERNAME='admin'
 export SN_PRODUCTION_MODE=1
-export SN_FORWARD_AUTH_PROFILE_SYS_ID='<sys_auth_profile_basic sys_id>'
-export NETWORK_ID='235937'
-
-python3 scripts/install_servicenow_demo.py
 ```
 
-For PDI-only testing, omit `SN_PRODUCTION_MODE` and use `FORWARD_USERNAME` / `FORWARD_PASSWORD` fallback credentials.
+When production mode is enabled:
 
-Audit the ServiceNow install:
+- ServiceNow tenant bindings must use `u_forward_auth_profile`.
+- `FORWARD_USERNAME` and `FORWARD_PASSWORD` fallback credentials are refused.
+- direct Forward credential fields in `u_forward_tenant_binding` must stay blank.
+- the installer verifies the binding posture before it completes.
+
+Forward calls are additionally constrained by:
+
+- `x_fwd_demo.forward.allowed_base_urls`, default `https://fwd.app/api`
+- `x_fwd_demo.forward.request_timeout_ms`, default `30000`
+
+Run this after every install, upgrade, credential rotation, or portal layout edit:
 
 ```bash
 npm run audit:servicenow
 ```
 
-2. Configure Forward ticketing and CMDB:
+The audit is read-only. It fails on missing tables, direct credentials in tenant bindings, duplicate portal widget instances, public page/widget exposure, inactive Script Includes, bad Forward allowlists, or Forward init failures.
+
+## Install Order
+
+Install in this order:
+
+1. Prepare ServiceNow credentials and Forward credentials.
+2. Install ServiceNow objects.
+3. Audit ServiceNow readiness.
+4. Install Forward ticketing and CMDB integrations.
+5. Verify Forward integration state.
+6. Run an optional browser proof.
+
+## 1. Prepare Credentials
+
+ServiceNow admin credential:
+
+- `SN_INSTANCE_URL`: ServiceNow instance URL, for example `https://example.service-now.com`
+- `SN_USERNAME`: ServiceNow implementation/admin user
+- `SN_PASSWORD`: ServiceNow implementation/admin password
+
+Forward API credential:
+
+- Forward access key
+- Forward secret
+- Forward network ID for CMDB sync
+
+For production ServiceNow runtime calls, create a ServiceNow Basic Auth Profile:
+
+1. In ServiceNow, create a Basic Auth Profile, for example `Forward API - Production`.
+2. Set profile `username` to the Forward access key.
+3. Set profile `password` to the Forward secret.
+4. Copy the profile `sys_id`.
+5. Use that sys_id as `SN_FORWARD_AUTH_PROFILE_SYS_ID`.
+
+## 2. Install ServiceNow Objects
 
 ```bash
-export SN_INSTANCE_URL='https://devXXXXX.service-now.com'
-export SN_USERNAME='admin'
-export SN_PASSWORD='...'
-export NETWORK_ID='235937'
-export FORWARD_USERNAME='...'
-export FORWARD_PASSWORD='...'
+export SN_INSTANCE_URL='https://<instance>.service-now.com'
+export SN_USERNAME='<implementation-admin>'
+export SN_PASSWORD='<password>'
+export SN_TENANT_USERNAME='<ServiceNow user who runs the widget>'
+export SN_PRODUCTION_MODE=1
+export SN_FORWARD_AUTH_PROFILE_SYS_ID='<sys_auth_profile_basic sys_id>'
+export FORWARD_BASE_URL='https://fwd.app/api'
+export NETWORK_ID='<Forward network id>'
+
+python3 scripts/install_servicenow_demo.py
+```
+
+The installer is idempotent. It creates or updates tables, fields, choices, properties, Script Includes, Script Actions, portal page/widget layout, tenant binding, and Change Request validation support.
+
+Expected final lines:
+
+```text
+verified portal init: networks=<count> cis=<count>
+ServiceNow field integration install complete
+Portal URL: https://<instance>.service-now.com/sp?id=connectivity_ticket
+```
+
+## 3. Audit ServiceNow Readiness
+
+```bash
+npm install
+npm run audit:servicenow
+```
+
+Expected result:
+
+```text
+SUMMARY failures=0 warnings=0 checks=<count>
+```
+
+Review [servicenow/setup/admin-runbook.md](servicenow/setup/admin-runbook.md) for the full ServiceNow admin runbook.
+
+## 4. Install Into Forward
+
+The Forward installer configures both ServiceNow ticketing and ServiceNow CMDB sync.
+
+```bash
+export FORWARD_BASE_URL='https://fwd.app/api'
+export FORWARD_USERNAME='<Forward access key>'
+export FORWARD_PASSWORD='<Forward secret>'
+export NETWORK_ID='<Forward network id>'
+
+export SN_INSTANCE_URL='https://<instance>.service-now.com'
+export SN_USERNAME='<ServiceNow integration user>'
+export SN_PASSWORD='<ServiceNow integration password>'
 
 python3 scripts/configure_forward_integrations.py
 ```
 
-You can also set `FORWARD_TOKEN_FILE` instead of `FORWARD_USERNAME` and `FORWARD_PASSWORD` when using a Forward access-key file that contains `Access key` and `Secret key`.
+Alternative credential input:
 
-The script is rerunnable. If Forward ticketing already points at a different ServiceNow PDI, the script deletes and recreates the Forward ticketing integration because Forward treats the ServiceNow instance URL as immutable after creation.
+```bash
+export FORWARD_TOKEN_FILE='/path/to/forward-access-key.txt'
+```
 
-Verify Forward-side integration state:
+The token file must contain Forward `Access key` and `Secret key` lines.
+
+What the script does in Forward:
+
+1. Verifies the Forward network is reachable and has a processed snapshot.
+2. Enables Forward ServiceNow ticketing.
+3. If ticketing is already pointed at a different ServiceNow instance, resets that immutable Forward integration and recreates it.
+4. Installs or updates the org NQE query:
+   `/ServiceNow/Forward Field Integration CMDB Netgear CI`
+5. Validates the NQE query against the latest processed snapshot.
+6. Reads ServiceNow CMDB schema for `cmdb_ci_netgear`.
+7. Maps Forward NQE columns to ServiceNow CMDB fields.
+8. Enables Forward ServiceNow CMDB sync for `NETWORK_ID`.
+
+Expected output:
+
+```text
+Forward API: https://fwd.app/api
+Network ID: <Forward network id>
+ServiceNow instance: https://<instance>.service-now.com
+Forward network <id> reachable; latest processed snapshot: <snapshot id>
+Forward ticketing configured
+Forward field integration NQE installed at /ServiceNow/Forward Field Integration CMDB Netgear CI
+Forward CMDB configured for network <id> with <count> mapped fields
+ServiceNow ticketing and CMDB integration complete
+```
+
+If the NQE query already exists and matches the packaged source, the script prints:
+
+```text
+Forward field integration NQE already current at /ServiceNow/Forward Field Integration CMDB Netgear CI
+```
+
+## 5. Verify Forward
 
 ```bash
 npm run verify:forward
 ```
 
-Set `PUSH_CMDB=1` for an intentional CMDB push proof.
+This verifies:
 
-Open the Service Portal demo at:
+- Forward ServiceNow ticketing endpoint is reachable.
+- Forward CMDB configuration exists.
+- Forward CMDB status endpoint responds.
+- Forward CMDB synchronization history endpoint responds.
 
-`https://<instance>.service-now.com/sp?id=connectivity_ticket`
-
-3. Verify the live browser flow:
+Optional side-effect proof:
 
 ```bash
-npm install
+export PUSH_CMDB=1
+npm run verify:forward
+```
 
-export SN_INSTANCE_URL='https://devXXXXX.service-now.com'
-export SN_USERNAME='admin'
-export SN_PASSWORD='...'
-export NETWORK_ID='235937'
+Use `PUSH_CMDB=1` only when you intentionally want to trigger a CMDB sync.
+
+## 6. Verify Portal Workflow
+
+Open:
+
+```text
+https://<instance>.service-now.com/sp?id=connectivity_ticket
+```
+
+Optional browser proof:
+
+```bash
+export SN_INSTANCE_URL='https://<instance>.service-now.com'
+export SN_USERNAME='<username>'
+export SN_PASSWORD='<password>'
+export NETWORK_ID='<Forward network id>'
+export SN_VERIFY_SRC_IP='192.168.100.57'
+export SN_VERIFY_DST_IP='203.0.113.10'
 
 npm run verify:servicenow
 ```
 
-The verifier writes evidence to `output/playwright/servicenow-demo-result.json` and `output/playwright/servicenow-demo-verified.png`. By default it uses Chrome in headless mode and verifies a blocked path from `192.168.100.57` to `203.0.113.10`; override those with `SN_VERIFY_SRC_IP` and `SN_VERIFY_DST_IP` when needed.
-
-To include native Change Request validation in the browser proof, set:
+To include native Change Request validation:
 
 ```bash
 export SN_VERIFY_CHANGE_NUMBER='CHG0030001'
 export SN_VERIFY_EXPECTED_OUTCOME='blocked'
+npm run verify:servicenow
 ```
+
+The verifier writes output to `output/playwright/`, which is intentionally ignored by git.
+
+## Screenshots
+
+### ServiceNow Portal
+
+![ServiceNow portal overview](docs/assets/servicenow-field-integration-overview.png)
+
+### Forward Evidence In ServiceNow
+
+![Forward evidence result](docs/assets/servicenow-forward-evidence-result.png)
+
+## CMDB Query Contract
+
+By default, the Forward CMDB integration installs this org-scoped Forward NQE query:
+
+```text
+/ServiceNow/Forward Field Integration CMDB Netgear CI
+```
+
+The packaged query is derived from Forward's stock library query:
+
+```text
+/External/ServiceNow/CMDB Netgear CI
+```
+
+The packaged query converts `Device Type` to a string so ServiceNow `cmdb_ci_netgear.device_type` can map cleanly in stock lab and field environments. Set `USE_STOCK_NQE=1` to use the unmodified Forward stock query; in stock-query mode, the installer omits `Device Type` from the CMDB field map.
+
+## Rollback
+
+ServiceNow:
+
+1. Remove or disable the `connectivity_ticket` portal widget instance.
+2. Disable Script Action `AnalyzeTicket`.
+3. Disable or rotate the Forward Basic Auth Profile.
+4. Preserve ticket and `u_forward_change_validation` records until retention owners approve deletion.
+5. Remove custom tables only after retention approval.
+
+Forward:
+
+1. Disable ServiceNow ticketing if it should no longer create or update tickets.
+2. Disable ServiceNow CMDB sync if it should no longer push CIs.
+3. Keep the org NQE query for auditability, or remove it after confirming no CMDB mapping uses it.

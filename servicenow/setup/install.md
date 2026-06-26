@@ -1,10 +1,10 @@
 # ServiceNow Install Checklist
 
-This checklist is intentionally explicit so the demo can be installed in a stock PDI without depending on internal Forward tooling.
+This checklist is intentionally explicit so the field integration can be installed without depending on internal Forward tooling.
 
-For a normal PDI install, run `scripts/install_servicenow_demo.py` from the package root. It creates or updates the schema, properties, groups, Script Includes, event action, Service Portal widget/page, tenant binding, and Change Request validation table. Use the manual sections below only when installing by hand.
+For a normal install, run `scripts/install_servicenow_demo.py` from the package root. It creates or updates the schema, properties, groups, Script Includes, event action, Service Portal widget/page, tenant binding, and Change Request validation table. Use the manual sections below only when installing by hand.
 
-For production-style credential storage, create a ServiceNow Basic Auth Profile for the Forward API access key and secret, then set `SN_PRODUCTION_MODE=1` and `SN_FORWARD_AUTH_PROFILE_SYS_ID` before running the installer. Production mode refuses direct `FORWARD_USERNAME` / `FORWARD_PASSWORD` fallback credentials. Without production mode, the installer uses the PDI fallback fields on `u_forward_tenant_binding`.
+For production-style credential storage, create a ServiceNow Basic Auth Profile for the Forward API access key and secret, then set `SN_PRODUCTION_MODE=1` and `SN_FORWARD_AUTH_PROFILE_SYS_ID` before running the installer. Production mode refuses direct `FORWARD_USERNAME` / `FORWARD_PASSWORD` fallback credentials. Without production mode, the installer uses the lab fallback fields on `u_forward_tenant_binding`.
 
 ## 1. Schema
 
@@ -31,7 +31,7 @@ Create these Script Includes from `servicenow/assets/`:
 Create event:
 
 - Name: `x_fwd_demo.analyze_ticket`
-- Description: `Forward demo: analyze connectivity ticket`
+- Description: `Forward field integration: analyze connectivity ticket`
 
 Create Script Action:
 
@@ -43,7 +43,7 @@ Create Script Action:
 
 Create or update a Service Portal widget:
 
-- Name: `Forward Workflow Demo`
+- Name: `Forward Field Integration`
 - Template: `sp_widget_template.html`
 - CSS: `sp_widget_style.css`
 - Client script: `sp_widget_client.js`
@@ -52,7 +52,7 @@ Create or update a Service Portal widget:
 Create a Service Portal page:
 
 - ID: `connectivity_ticket`
-- Title: `Forward Workflow Demo`
+- Title: `Forward Field Integration`
 
 Place the widget on the page. The usual URL is:
 
@@ -62,7 +62,7 @@ Place the widget on the page. The usual URL is:
 
 Create one row in `u_forward_tenant_binding` for each ServiceNow user that will run the widget.
 
-For a PDI, the first row is usually:
+For lab-only fallback testing, the first row is usually:
 
 - `u_tenant_username`: `admin`
 - `u_forward_base_url`: `https://fwd.app/api`
@@ -85,11 +85,11 @@ The audit fails if tenant bindings use direct Forward credentials, if the portal
 
 ## 6. Forward-Side Integrations
 
-Run `scripts/configure_forward_integrations.py` from the package root to enable Forward ticketing and Forward CMDB sync.
+Run `scripts/configure_forward_integrations.py` from the package root to enable Forward ticketing and Forward CMDB sync. See `forward-install.md` for the detailed Forward-side workflow.
 
-The script installs or updates the org-scoped Forward NQE query `/ServiceNow/Forward Workflow Demo CMDB Netgear CI`, derived from the stock Forward CMDB Netgear CI query with `Device Type` converted to a string for stock PDI compatibility.
+The script installs or updates the org-scoped Forward NQE query `/ServiceNow/Forward Field Integration CMDB Netgear CI`, derived from the stock Forward CMDB Netgear CI query with `Device Type` converted to a string for broad lab-instance compatibility.
 
-Open the demo at:
+Open the portal at:
 
 `https://<instance>.service-now.com/sp?id=connectivity_ticket`
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Enable Forward ServiceNow ticketing and CMDB for one network.
 
-This is intentionally standalone so the demo can be installed in a ServiceNow
-PDI without depending on internal Forward tooling. CMDB sync is scoped to NETWORK_ID.
+This is intentionally standalone so field teams and ServiceNow admins can
+install the integration without depending on internal Forward tooling. CMDB
+sync is scoped to NETWORK_ID.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ DEFAULT_NETWORK_ID = "235937"
 CMDB_CLASS = "cmdb_ci_netgear"
 STOCK_CMDB_QUERY_PATH = "/External/ServiceNow/CMDB Netgear CI"
 STOCK_CMDB_FALLBACK_QUERY_ID = "FQ_d1336efd5d49c52215e4dbbde013ecbe78d964e7"
-DEMO_CMDB_QUERY_PATH = "/ServiceNow/Forward Workflow Demo CMDB Netgear CI"
-DEMO_CMDB_QUERY_FILE = "servicenow/nqe/Forward Workflow Demo CMDB Netgear CI"
+FIELD_CMDB_QUERY_PATH = "/ServiceNow/Forward Field Integration CMDB Netgear CI"
+FIELD_CMDB_QUERY_FILE = "servicenow/nqe/Forward Field Integration CMDB Netgear CI"
 
 BASE_CMDB_FIELD_MAP = [
     ("Name", "name"),
@@ -220,9 +221,9 @@ def enable_ticketing(client: ForwardClient, instance_url: str, username: str, pa
     print("Forward ticketing configured")
 
 
-def cmdb_field_map(use_demo_nqe: bool) -> list[tuple[str, str]]:
+def cmdb_field_map(use_field_nqe: bool) -> list[tuple[str, str]]:
     fields = list(BASE_CMDB_FIELD_MAP)
-    if use_demo_nqe:
+    if use_field_nqe:
         fields.insert(7, DEVICE_TYPE_FIELD_MAP)
     return fields
 
@@ -275,7 +276,7 @@ def nqe_analysis_for_path(client: ForwardClient, query_path: str, snapshot_id: s
     for analysis in analyses:
         if isinstance(analysis, dict) and str(analysis.get("path", "")).strip() == query_path:
             return analysis
-    raise ForwardError(f"demo NQE analysis not found for {query_path}")
+    raise ForwardError(f"field integration NQE analysis not found for {query_path}")
 
 
 def nqe_type_name(value: Any) -> str:
@@ -314,30 +315,30 @@ def commit_nqe_changes(client: ForwardClient, paths: list[str], title: str) -> N
     )
 
 
-def validate_demo_nqe_analysis(client: ForwardClient, query_path: str, snapshot_id: str) -> None:
+def validate_field_nqe_analysis(client: ForwardClient, query_path: str, snapshot_id: str) -> None:
     if not snapshot_id:
-        print("Warning: skipping demo NQE analysis validation because no processed snapshot was found")
+        print("Warning: skipping field integration NQE analysis validation because no processed snapshot was found")
         return
     analysis = nqe_analysis_for_path(client, query_path, snapshot_id)
     if analysis.get("error") or not analysis.get("valid", True):
-        raise ForwardError(f"demo NQE analysis failed for {query_path}")
+        raise ForwardError(f"field integration NQE analysis failed for {query_path}")
     columns = analysis.get("columns") if isinstance(analysis.get("columns"), dict) else {}
     device_type = nqe_type_name(columns.get("Device Type"))
     if device_type != "String":
-        raise ForwardError(f"demo NQE Device Type column is {device_type or '<missing>'}, expected String")
+        raise ForwardError(f"field integration NQE Device Type column is {device_type or '<missing>'}, expected String")
 
 
-def install_demo_nqe_query(client: ForwardClient, query_path: str, source_file: Path, snapshot_id: str) -> str:
+def install_field_nqe_query(client: ForwardClient, query_path: str, source_file: Path, snapshot_id: str) -> str:
     source = source_file.read_text()
     if client.dry_run:
-        print(f"DRY-RUN install/update Forward demo NQE at {query_path}")
-        return "OQ_dry_run_forward_servicenow_demo_cmdb"
+        print(f"DRY-RUN install/update Forward field integration NQE at {query_path}")
+        return "OQ_dry_run_forward_servicenow_field_cmdb"
     ensure_nqe_directories(client, query_path)
     existing = find_org_query(client, query_path)
     if existing:
         current_source = get_committed_org_query_source(client, existing, query_path)
         if current_source.strip() == source.strip():
-            print(f"Forward demo NQE already current at {query_path}")
+            print(f"Forward field integration NQE already current at {query_path}")
         else:
             basis = {
                 "queryId": str(existing.get("queryId") or ""),
@@ -348,32 +349,32 @@ def install_demo_nqe_query(client: ForwardClient, query_path: str, source_file: 
                 "/users/current/nqe/changes?" + query_params({"action": "editQuery", "path": query_path}),
                 {"sourceCode": source, "basis": basis},
             )
-            commit_nqe_changes(client, [query_path], "Update Forward ServiceNow demo CMDB query")
-            print(f"Forward demo NQE updated at {query_path}")
+            commit_nqe_changes(client, [query_path], "Update Forward ServiceNow field integration CMDB query")
+            print(f"Forward field integration NQE updated at {query_path}")
     else:
         client.request(
             "POST",
             "/users/current/nqe/changes?" + query_params({"action": "addQuery", "path": query_path}),
             {"sourceCode": source},
         )
-        commit_nqe_changes(client, [query_path], "Install Forward ServiceNow demo CMDB query")
-        print(f"Forward demo NQE installed at {query_path}")
+        commit_nqe_changes(client, [query_path], "Install Forward ServiceNow field integration CMDB query")
+        print(f"Forward field integration NQE installed at {query_path}")
 
     query = find_org_query(client, query_path)
     query_id = str((query or {}).get("queryId") or "").strip()
     if not query_id:
         raise ForwardError(f"could not discover org query id for {query_path}")
-    validate_demo_nqe_analysis(client, query_path, snapshot_id)
+    validate_field_nqe_analysis(client, query_path, snapshot_id)
     return query_id
 
 
-def resolve_cmdb_query_id(client: ForwardClient, use_demo_nqe: bool, snapshot_id: str) -> tuple[str, str]:
-    if not use_demo_nqe:
+def resolve_cmdb_query_id(client: ForwardClient, use_field_nqe: bool, snapshot_id: str) -> tuple[str, str]:
+    if not use_field_nqe:
         return discover_stock_cmdb_query_id(client), STOCK_CMDB_QUERY_PATH
     package_root = Path(__file__).resolve().parents[1]
-    source_file = Path(env("DEMO_NQE_SOURCE_FILE", str(package_root / DEMO_CMDB_QUERY_FILE))).expanduser()
-    query_path = env("DEMO_NQE_PATH", DEMO_CMDB_QUERY_PATH)
-    return install_demo_nqe_query(client, query_path, source_file, snapshot_id), query_path
+    source_file = Path(env("FIELD_NQE_SOURCE_FILE", str(package_root / FIELD_CMDB_QUERY_FILE))).expanduser()
+    query_path = env("FIELD_NQE_PATH", FIELD_CMDB_QUERY_PATH)
+    return install_field_nqe_query(client, query_path, source_file, snapshot_id), query_path
 
 
 def get_cmdb_schema(
@@ -500,7 +501,7 @@ def main() -> int:
     sn_username = require_env("SN_USERNAME")
     sn_password = require_env("SN_PASSWORD")
     dry_run = truthy(env("DRY_RUN"))
-    use_demo_nqe = not truthy(env("USE_STOCK_NQE"))
+    use_field_nqe = not truthy(env("USE_STOCK_NQE"))
 
     client = ForwardClient(forward_base, forward_user, forward_pass, dry_run=dry_run)
     print(f"Forward API: {forward_base}")
@@ -509,7 +510,7 @@ def main() -> int:
 
     snapshot_id = validate_network(client, network_id)
     enable_ticketing(client, instance_url, sn_username, sn_password)
-    query_id, query_path = resolve_cmdb_query_id(client, use_demo_nqe, snapshot_id)
+    query_id, query_path = resolve_cmdb_query_id(client, use_field_nqe, snapshot_id)
     enable_cmdb(
         client,
         network_id,
@@ -518,9 +519,9 @@ def main() -> int:
         sn_password,
         query_id,
         query_path,
-        cmdb_field_map(use_demo_nqe),
+        cmdb_field_map(use_field_nqe),
     )
-    print("ServiceNow ticketing and CMDB scaffold complete")
+    print("ServiceNow ticketing and CMDB integration complete")
     return 0
 
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Audit ServiceNow admin readiness for the Forward workflow package.
+"""Audit ServiceNow admin readiness for the Forward field integration.
 
 The audit is read-only and redacts credential values. It is meant for SNOW
-admins before enabling this in a production-like instance.
+admins before enabling this in a production-managed instance.
 """
 
 from __future__ import annotations

@@ -1,10 +1,14 @@
 # ServiceNow Admin Runbook
 
-This runbook is for ServiceNow admins installing the Forward workflow package in a production-like instance.
+This runbook is for ServiceNow admins installing the Forward field integration in a production-managed instance.
+
+## Support Boundary
+
+This is field integration code. It is not a supported Forward product, packaged ServiceNow app, or standard Forward platform feature. Operate it through the customer's normal ServiceNow change-control, access-control, and rollback processes.
 
 ## Scope
 
-The package installs demo workflow objects:
+The package installs field integration workflow objects:
 
 - custom task tables for Forward connectivity tickets and Change Request validations
 - Script Includes that call the Forward API
@@ -105,8 +109,8 @@ Disable user access first:
 4. Preserve `u_forward_change_validation` and ticket records if they are audit evidence.
 5. Remove custom tables only after retention owners approve deletion.
 
-## Known Demo Boundaries
+## Known Boundaries
 
 - The package uses `u_` custom tables, not a packaged ServiceNow scoped app.
 - ACL design should be reviewed and adjusted by the ServiceNow platform owner before broad rollout.
-- The CMDB mapping targets `cmdb_ci_netgear` for stock PDI compatibility; production CMDB class mapping should match local CMDB policy.
+- The CMDB mapping targets `cmdb_ci_netgear` for broad lab-instance compatibility; production CMDB class mapping should match local CMDB policy.

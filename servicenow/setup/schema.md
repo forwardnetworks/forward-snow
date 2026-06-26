@@ -1,8 +1,8 @@
 # ServiceNow Schema
 
-Create these objects in the PDI before loading the widget and script assets.
+Create these objects before loading the widget and script assets.
 
-The package supports either global custom tables (`u_*`) or scoped-app tables (`x_fwd_demo_*`). The simple PDI path uses the global custom table names below.
+The package supports global custom tables (`u_*`). Some server code can read scoped-app table overrides through system properties for migration compatibility.
 
 ## Tables
 
@@ -69,11 +69,11 @@ The package supports either global custom tables (`u_*`) or scoped-app tables (`
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `u_tenant_username` | String | ServiceNow username, usually `admin` for a PDI |
+| `u_tenant_username` | String | ServiceNow username bound to Forward API access |
 | `u_forward_base_url` | URL | usually `https://fwd.app/api` |
 | `u_forward_auth_profile` | Reference | `sys_auth_profile_basic`; preferred production credential storage |
-| `u_forward_username` | String | Forward access key or username; PDI fallback |
-| `u_forward_password` | Password (2 Way Encrypted) | Forward secret or password; PDI fallback |
+| `u_forward_username` | String | Forward access key or username; lab fallback only |
+| `u_forward_password` | Password (2 Way Encrypted) | Forward secret or password; lab fallback only |
 
 ## Forward Change Validation Fields
 
