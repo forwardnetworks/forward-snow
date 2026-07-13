@@ -31,6 +31,15 @@ Fallback:
 - Change Request validation writes concise Forward evidence to `change_request.work_notes`.
 - It also creates `u_forward_change_validation` records for audit and reporting.
 - Use the validation result as an approval signal, not an automatic approval.
+- Assign `x_fwd_demo.assurance_writer` only to the Forward-side feedback integration user.
+- The change-assurance endpoint requires authentication and revalidates the bounded evidence contract before writing.
+- Keep direct web-service access disabled on `u_forward_change_assurance`; generic Table API writes bypass the
+  checksummed, role-gated ingress contract and are unsupported.
+- `u_forward_change_assurance` stores aggregate decision/lineage fields; the bounded JSON bundle is attached before a
+  Change Request work note is added.
+- Keep path rows, device hops, credentials, and raw Forward responses out of assurance payloads.
+- For Flow Designer, use only an exact HTTPS worker allowlist and a dedicated Basic Auth Profile. Never place the
+  worker password in a system property, custom table, or action script.
 
 ## Forward Verification
 
@@ -58,7 +67,8 @@ The audit is read-only and should be part of every install, upgrade, credential 
 ## Access Control
 
 - Keep the Service Portal page and widget non-public.
-- Review ACLs for `u_forward_connectivity_ticket`, `u_forward_connectivity_hop`, `u_forward_tenant_binding`, and `u_forward_change_validation` before broad rollout.
+- Review ACLs for `u_forward_connectivity_ticket`, `u_forward_connectivity_hop`, `u_forward_tenant_binding`,
+  `u_forward_change_validation`, and `u_forward_change_assurance` before broad rollout.
 - Limit tenant binding writes to ServiceNow admins or the owning platform team.
 - Treat `u_forward_change_validation` and linked Change Request work notes as audit evidence.
 

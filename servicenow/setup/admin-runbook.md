@@ -10,8 +10,10 @@ This is field integration code. It is not a supported Forward product, packaged 
 
 The package installs field integration workflow objects:
 
-- custom task tables for Forward connectivity tickets and Change Request validations
+- custom task tables for Forward connectivity tickets, path validations, and deployment assurance
 - Script Includes that call the Forward API
+- authenticated bounded-evidence ingress for the Forward-side conductor
+- purchase-free Flow Designer client using core Script steps and an auth profile
 - Service Portal page and widget
 - routing groups and system properties
 - optional Forward ticketing and CMDB integration configuration
@@ -28,6 +30,7 @@ Use an admin account or an implementation account with rights to manage:
 - system properties
 - Basic Auth Profiles
 - assignment groups
+- Scripted REST APIs/resources and the `x_fwd_demo.assurance_writer` role
 
 Use a named integration/admin account. Do not use a personal account for long-lived production ownership.
 
@@ -81,6 +84,11 @@ Required passing checks:
 - Script Includes are active
 - portal init reaches Forward networks
 - Change Request validation table is ready
+- change-assurance ledger idempotency is unique
+- direct web-service access to the change-assurance table is disabled
+- assurance API/resource is active and requires authentication
+- configured assurance worker origin is HTTPS, exactly allowlisted, and uses a valid Basic Auth Profile
+- configured assurance worker request/response payload limit is between 16384 and 1048576 bytes
 
 Run browser verification only from a controlled workstation:
 
@@ -96,6 +104,7 @@ Set `SN_VERIFY_CHANGE_NUMBER` to include native Change Request validation.
 - Keep `x_fwd_demo.forward.allowed_base_urls` pinned to exact Forward API origins.
 - Keep `x_fwd_demo.forward.request_timeout_ms` between 1000 and 60000 ms.
 - Review `u_forward_change_validation` records and linked Change Request work notes during CAB review.
+- Review `u_forward_change_assurance` decision, lineage hashes, attachment, and publication state during CAB review.
 - Keep Service Portal page/widget `public=false`.
 - Re-run `npm run audit:servicenow` after upgrades, credential rotation, and portal layout edits.
 
@@ -106,7 +115,7 @@ Disable user access first:
 1. Remove the widget instance from `sp?id=connectivity_ticket`, or set the page/widget inactive according to local policy.
 2. Disable Script Action `AnalyzeTicket`.
 3. Disable or remove the Forward Basic Auth Profile.
-4. Preserve `u_forward_change_validation` and ticket records if they are audit evidence.
+4. Preserve `u_forward_change_validation`, `u_forward_change_assurance`, and ticket records if they are audit evidence.
 5. Remove custom tables only after retention owners approve deletion.
 
 ## Known Boundaries
@@ -114,3 +123,5 @@ Disable user access first:
 - The package uses `u_` custom tables, not a packaged ServiceNow scoped app.
 - ACL design should be reviewed and adjusted by the ServiceNow platform owner before broad rollout.
 - The CMDB mapping targets `cmdb_ci_netgear` for broad lab-instance compatibility; production CMDB class mapping should match local CMDB policy.
+- Assurance-ledger `choice` fields are written natively by the ServiceNow service. Forward CMDB mapping does not
+  directly support `choice`; keep any ServiceNow-side default/flow/transform workaround explicit and separate.

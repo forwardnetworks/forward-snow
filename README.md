@@ -11,7 +11,9 @@ This repository is a Forward field integration package. It is not a supported Fo
 ## What It Installs
 
 - ServiceNow custom task tables for Forward connectivity tickets and Change Request validations.
+- A ServiceNow-native change-assurance ledger for idempotent Forward/Dynatrace deployment evidence.
 - ServiceNow Script Includes that call the Forward API with bounded timeout and base-URL allowlisting.
+- An authenticated Scripted REST endpoint that validates and idempotently ingests bounded Forward/Dynatrace assurance evidence.
 - A Service Portal page and widget for path analysis, incident creation, routing, and Change Request validation.
 - ServiceNow system properties, routing groups, and tenant bindings.
 - A Forward ServiceNow ticketing integration.
@@ -28,6 +30,8 @@ This repository is a Forward field integration package. It is not a supported Fo
 | `servicenow/setup/install.md` | Manual ServiceNow install checklist. |
 | `servicenow/setup/production.md` | Production credential, egress, access-control, and rollback notes. |
 | `servicenow/setup/schema.md` | Tables, fields, choices, and system properties. |
+| `servicenow/setup/flow-designer.md` | Purchase-free Workflow Studio actions using core Script steps. |
+| `docs/change-assurance-blue-sky.md` | ServiceNow-native Forward/Dynatrace change-assurance target workflow and phased plan. |
 | `servicenow/nqe/` | Forward NQE source for CMDB export. |
 | `scripts/install_servicenow_demo.py` | Idempotent ServiceNow installer. Name retained for compatibility. |
 | `scripts/configure_forward_integrations.py` | Idempotent Forward ticketing and CMDB installer. |
@@ -61,7 +65,30 @@ Run this after every install, upgrade, credential rotation, or portal layout edi
 npm run audit:servicenow
 ```
 
-The audit is read-only. It fails on missing tables, direct credentials in tenant bindings, duplicate portal widget instances, public page/widget exposure, inactive Script Includes, bad Forward allowlists, or Forward init failures.
+The audit is read-only. It fails on missing tables, direct credentials in tenant bindings, duplicate portal widget
+instances, public page/widget exposure, inactive Script Includes, bad Forward allowlists, an unbounded worker payload
+configuration, direct Table API access to the assurance ledger, or Forward init failures.
+
+For change assurance, the installer also creates role `x_fwd_demo.assurance_writer` and an authenticated POST resource:
+
+```text
+/api/now/forward_change_assurance/changes/{change_sys_id}/evidence
+```
+
+Assign the writer role only to the bounded Forward-side feedback integration user. The endpoint accepts
+`forward-dynatrace-servicenow-change-assurance-evidence/v1`, rejects partial or extended schema documents, topology,
+credential content, oversized UTF-8 payloads, and values that cannot fit their persisted fields. The assurance table
+does not allow direct Table API web-service access. Replaying the same evidence bundle reuses the original ledger
+record, attachment, and work note. The companion
+`forward-dynatrace` conductor posts the exact evidence bytes to this endpoint and verifies the returned decision and
+idempotency key before accepting the publication receipt. Requests must include
+`X-Forward-Dynatrace-SHA256: <evidence-sha256>`; ServiceNow verifies it against the raw request body before writing.
+Invalid client evidence returns a bounded `4xx` response; unexpected publication/runtime failures return a generic
+`500` so callers can distinguish retryable server failures without receiving internal details.
+
+For purchase-free Flow Designer orchestration, the installer adds `ChangeAssuranceFlowClient` plus bounded Change
+Request correlation fields. It uses a core Script step and a Basic Auth Profile rather than the IntegrationHub REST
+step. See [servicenow/setup/flow-designer.md](servicenow/setup/flow-designer.md).
 
 ## Install Order
 

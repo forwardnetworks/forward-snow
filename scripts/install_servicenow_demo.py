@@ -13,6 +13,7 @@ import os
 import re
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,11 +25,16 @@ TICKET_TABLE = "u_forward_connectivity_ticket"
 HOP_TABLE = "u_forward_connectivity_hop"
 BINDING_TABLE = "u_forward_tenant_binding"
 CHANGE_VALIDATION_TABLE = "u_forward_change_validation"
+CHANGE_ASSURANCE_TABLE = "u_forward_change_assurance"
 WIDGET_NAME = "Forward Field Integration"
 WIDGET_ID = "forward-workflow-demo"
 LEGACY_WIDGET_NAMES = ("Forward Workflow Demo",)
 PAGE_ID = "connectivity_ticket"
 EVENT_NAME = "x_fwd_demo.analyze_ticket"
+ASSURANCE_WRITER_ROLE = "x_fwd_demo.assurance_writer"
+ASSURANCE_API_NAME = "Forward Change Assurance"
+ASSURANCE_API_ID = "forward_change_assurance"
+ASSURANCE_RESOURCE_PATH = "/changes/{change_sys_id}/evidence"
 DEFAULT_FORWARD_BASE_URL = "https://fwd.app/api"
 DEFAULT_NETWORK_ID = "235937"
 AUTH_PROFILE_TABLE = "sys_auth_profile_basic"
@@ -53,6 +59,22 @@ def require_env(name: str) -> str:
     if not value:
         raise SystemExit(f"missing required environment variable: {name}")
     return value
+
+
+def parse_json_response(method: str, endpoint: str, status: int, body: str) -> Any:
+    if not body.strip():
+        return None
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as exc:
+        hint = (
+            "the instance may be hibernating or authentication may have redirected to sign-in"
+            if status == 200
+            else "ServiceNow did not return the expected JSON error document"
+        )
+        raise ServiceNowError(
+            f"{method} {endpoint} returned HTTP {status} with a non-JSON response; {hint}"
+        ) from exc
 
 
 def parse_forward_token_file(path: Path) -> tuple[str, str]:
@@ -93,17 +115,26 @@ class ServiceNowClient:
         req.add_header("Authorization", self.auth_header)
         req.add_header("Accept", "application/json")
         req.add_header("Content-Type", "application/json")
-        try:
-            with urllib.request.urlopen(req, timeout=60, context=self.ssl_context) as resp:
-                body = resp.read().decode(errors="replace")
-                parsed = json.loads(body) if body.strip() else None
-                return resp.status, parsed, body
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode(errors="replace")
-            if exc.code in ok_statuses:
-                parsed = json.loads(body) if body.strip() else None
-                return exc.code, parsed, body
-            raise ServiceNowError(f"{method} {endpoint} failed: HTTP {exc.code}: {body.strip()}") from exc
+        attempts = 3 if method == "GET" else 1
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(req, timeout=60, context=self.ssl_context) as resp:
+                    body = resp.read().decode(errors="replace")
+                    parsed = parse_json_response(method, endpoint, resp.status, body)
+                    return resp.status, parsed, body
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode(errors="replace")
+                if exc.code in ok_statuses:
+                    parsed = parse_json_response(method, endpoint, exc.code, body)
+                    return exc.code, parsed, body
+                raise ServiceNowError(f"{method} {endpoint} failed: HTTP {exc.code}: {body.strip()}") from exc
+            except (urllib.error.URLError, TimeoutError) as exc:
+                if attempt + 1 < attempts:
+                    time.sleep(2**attempt)
+                    continue
+                reason = getattr(exc, "reason", exc)
+                raise ServiceNowError(f"{method} {endpoint} failed after {attempts} attempts: {reason}") from exc
+        raise AssertionError("unreachable ServiceNow request state")
 
     def query(
         self,
@@ -221,6 +252,7 @@ def ensure_tables(client: ServiceNowClient) -> None:
         (HOP_TABLE, "Forward Workflow Hop", ""),
         (BINDING_TABLE, "Forward Tenant Binding", ""),
         (CHANGE_VALIDATION_TABLE, "Forward Change Validation", task_id),
+        (CHANGE_ASSURANCE_TABLE, "Forward Change Assurance", task_id),
     ]
     for name, label, super_class in definitions:
         payload = {
@@ -228,7 +260,9 @@ def ensure_tables(client: ServiceNowClient) -> None:
             "label": label,
             "access": "public",
             "read_access": "true",
-            "ws_access": "true",
+            # Assurance writes must pass through the authenticated, role-gated,
+            # checksummed Scripted REST resource rather than the generic Table API.
+            "ws_access": "false" if name == CHANGE_ASSURANCE_TABLE else "true",
         }
         if super_class:
             payload["super_class"] = super_class
@@ -245,6 +279,7 @@ def field(
     max_length: int = 40,
     default: str = "",
     choice: str = "",
+    unique: bool = False,
 ) -> dict[str, Any]:
     payload = {
         "name": table,
@@ -260,6 +295,8 @@ def field(
         payload["default_value"] = default
     if choice:
         payload["choice"] = choice
+    if unique:
+        payload["unique"] = "true"
     return payload
 
 
@@ -339,6 +376,43 @@ def ensure_fields(client: ServiceNowClient) -> None:
         field(CHANGE_VALIDATION_TABLE, "u_forward_query_url", "Forward Query URL", "url", max_length=1024),
         field(CHANGE_VALIDATION_TABLE, "u_forward_evidence_summary", "Forward Evidence Summary", "html", max_length=4000),
         field(CHANGE_VALIDATION_TABLE, "u_raw_excerpt", "Raw Excerpt", "html", max_length=8000),
+        field(CHANGE_ASSURANCE_TABLE, "u_run_id", "Assurance Run ID", "string", max_length=255),
+        field(
+            CHANGE_ASSURANCE_TABLE,
+            "u_idempotency_key",
+            "Idempotency Key",
+            "string",
+            max_length=128,
+            unique=True,
+        ),
+        field(CHANGE_ASSURANCE_TABLE, "u_deployment_id", "Deployment ID", "string", max_length=255),
+        field(CHANGE_ASSURANCE_TABLE, "u_service_entity_ids", "Dynatrace Service Entity IDs", "string", max_length=4000),
+        field(CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "Lifecycle State", "choice", default="received", choice="1"),
+        field(CHANGE_ASSURANCE_TABLE, "u_decision", "Gate Decision", "choice", choice="1"),
+        field(CHANGE_ASSURANCE_TABLE, "u_reason_codes", "Reason Codes", "string", max_length=4000),
+        field(CHANGE_ASSURANCE_TABLE, "u_forward_network_id", "Forward Network ID", "string", max_length=255),
+        field(CHANGE_ASSURANCE_TABLE, "u_before_snapshot_id", "Before Snapshot ID", "string", max_length=255),
+        field(CHANGE_ASSURANCE_TABLE, "u_after_snapshot_id", "After Snapshot ID", "string", max_length=255),
+        field(CHANGE_ASSURANCE_TABLE, "u_reconciliation_run_id", "Reconciliation Run ID", "string", max_length=255),
+        field(CHANGE_ASSURANCE_TABLE, "u_reconciliation_state", "Reconciliation State", "string", max_length=64),
+        field(CHANGE_ASSURANCE_TABLE, "u_dynatrace_deployment_state", "Dynatrace Deployment State", "string", max_length=64),
+        field(CHANGE_ASSURANCE_TABLE, "u_dynatrace_service_health", "Dynatrace Service Health", "string", max_length=64),
+        field(CHANGE_ASSURANCE_TABLE, "u_dynatrace_open_problem_count", "Dynatrace Open Problem Count", "integer"),
+        field(CHANGE_ASSURANCE_TABLE, "u_preflight_sha256", "Preflight SHA-256", "string", max_length=64),
+        field(CHANGE_ASSURANCE_TABLE, "u_gate_sha256", "Gate SHA-256", "string", max_length=64),
+        field(CHANGE_ASSURANCE_TABLE, "u_evidence_sha256", "Evidence SHA-256", "string", max_length=64),
+        field(CHANGE_ASSURANCE_TABLE, "u_generated_at", "Evidence Generated At", "glide_date_time"),
+        field(
+            CHANGE_ASSURANCE_TABLE,
+            "u_attachment",
+            "Evidence Attachment",
+            "reference",
+            reference="sys_attachment",
+            max_length=32,
+        ),
+        field(CHANGE_ASSURANCE_TABLE, "u_work_note_marker", "Work Note Marker", "string", max_length=128),
+        field(CHANGE_ASSURANCE_TABLE, "u_publication_status", "Publication Status", "choice", default="pending", choice="1"),
+        field(CHANGE_ASSURANCE_TABLE, "u_publication_error", "Publication Error", "string", max_length=4000),
     ]
     if auth_profile_supported:
         fields.append(
@@ -354,9 +428,46 @@ def ensure_fields(client: ServiceNowClient) -> None:
     else:
         print(f"warning {AUTH_PROFILE_TABLE} not found; auth-profile binding field skipped")
     if change_request_supported:
+        fields.extend(
+            [
+                field(
+                    CHANGE_REQUEST_TABLE,
+                    "u_forward_assurance_run_id",
+                    "Forward Assurance Run ID",
+                    "string",
+                    max_length=64,
+                ),
+                field(
+                    CHANGE_REQUEST_TABLE,
+                    "u_forward_assurance_status",
+                    "Forward Assurance Status",
+                    "choice",
+                    default="not_started",
+                    choice="1",
+                ),
+                field(
+                    CHANGE_REQUEST_TABLE,
+                    "u_forward_assurance_decision",
+                    "Forward Assurance Decision",
+                    "choice",
+                    default="pending",
+                    choice="1",
+                ),
+            ]
+        )
         fields.append(
             field(
                 CHANGE_VALIDATION_TABLE,
+                "u_change_request",
+                "Change Request",
+                "reference",
+                reference=CHANGE_REQUEST_TABLE,
+                max_length=32,
+            )
+        )
+        fields.append(
+            field(
+                CHANGE_ASSURANCE_TABLE,
                 "u_change_request",
                 "Change Request",
                 "reference",
@@ -401,6 +512,33 @@ def ensure_choices(client: ServiceNowClient) -> None:
         (CHANGE_VALIDATION_TABLE, "u_block_category", "reachability", "Reachability", 400),
         (CHANGE_VALIDATION_TABLE, "u_block_category", "analysis_error", "Analysis error", 500),
         (CHANGE_VALIDATION_TABLE, "u_block_category", "unknown", "Unknown", 600),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "received", "Received", 100),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "baseline_pending", "Baseline pending", 200),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "baseline_captured", "Baseline captured", 300),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "waiting", "Waiting for completion", 400),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "evidence_received", "Evidence received", 500),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "complete", "Complete", 600),
+        (CHANGE_ASSURANCE_TABLE, "u_lifecycle_state", "error", "Error", 700),
+        (CHANGE_ASSURANCE_TABLE, "u_decision", "pass", "Pass", 100),
+        (CHANGE_ASSURANCE_TABLE, "u_decision", "warn", "Warn", 200),
+        (CHANGE_ASSURANCE_TABLE, "u_decision", "fail", "Fail", 300),
+        (CHANGE_ASSURANCE_TABLE, "u_publication_status", "pending", "Pending", 100),
+        (CHANGE_ASSURANCE_TABLE, "u_publication_status", "attachment_ready", "Attachment ready", 200),
+        (CHANGE_ASSURANCE_TABLE, "u_publication_status", "published", "Published", 300),
+        (CHANGE_ASSURANCE_TABLE, "u_publication_status", "error", "Error", 400),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "not_started", "Not started", 100),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "start-queued", "Start queued", 200),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "start-running", "Start running", 300),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "baseline-captured", "Baseline captured", 400),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "complete-queued", "Complete queued", 500),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "complete-running", "Complete running", 600),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "completed", "Completed", 700),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "blocked", "Blocked", 800),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_status", "failed", "Failed", 900),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_decision", "pending", "Pending", 100),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_decision", "pass", "Pass", 200),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_decision", "warn", "Warn", 300),
+        (CHANGE_REQUEST_TABLE, "u_forward_assurance_decision", "fail", "Fail", 400),
     ]
     for table, element, value, label, sequence in choices:
         payload = {
@@ -420,7 +558,14 @@ def ensure_choices(client: ServiceNowClient) -> None:
         )
 
 
-def ensure_properties(client: ServiceNowClient, network_id: str, forward_base_url: str) -> None:
+def ensure_properties(
+    client: ServiceNowClient,
+    network_id: str,
+    forward_base_url: str,
+    assurance_worker_base_url: str = "",
+    assurance_worker_auth_profile: str = "",
+) -> None:
+    worker_base_url = assurance_worker_base_url.rstrip("/")
     props = {
         "x_fwd_demo.forward.max_results": "1",
         "x_fwd_demo.forward.allowed_base_urls": forward_base_url.rstrip("/") or DEFAULT_FORWARD_BASE_URL,
@@ -432,6 +577,14 @@ def ensure_properties(client: ServiceNowClient, network_id: str, forward_base_ur
         "x_fwd_demo.tables.hop": HOP_TABLE,
         "x_fwd_demo.tables.binding": BINDING_TABLE,
         "x_fwd_demo.tables.change_validation": CHANGE_VALIDATION_TABLE,
+        "x_fwd_demo.tables.change_assurance": CHANGE_ASSURANCE_TABLE,
+        "x_fwd_demo.assurance.max_payload_bytes": "262144",
+        "x_fwd_demo.assurance.writer_role": ASSURANCE_WRITER_ROLE,
+        "x_fwd_demo.assurance.worker_base_url": worker_base_url,
+        "x_fwd_demo.assurance.worker_allowed_base_urls": worker_base_url,
+        "x_fwd_demo.assurance.worker_auth_profile": assurance_worker_auth_profile,
+        "x_fwd_demo.assurance.worker_timeout_ms": "30000",
+        "x_fwd_demo.assurance.worker_max_payload_bytes": "524288",
         "x_fwd_demo.groups.network": "Network Team",
         "x_fwd_demo.groups.security": "Security Team",
         "x_fwd_demo.groups.triage": "Triage",
@@ -455,11 +608,26 @@ def ensure_groups(client: ServiceNowClient) -> None:
         )
 
 
+def ensure_roles(client: ServiceNowClient) -> None:
+    client.upsert(
+        "sys_user_role",
+        f"name={ASSURANCE_WRITER_ROLE}",
+        {
+            "name": ASSURANCE_WRITER_ROLE,
+            "description": "May submit bounded Forward/Dynatrace change-assurance evidence",
+        },
+        f"role {ASSURANCE_WRITER_ROLE}",
+    )
+
+
 def ensure_scripts(client: ServiceNowClient) -> None:
     scripts = [
         ("ForwardClient", "ForwardClient.js"),
         ("PathNormalizer", "PathNormalizer.js"),
         ("TicketAnalysis", "TicketAnalysis.js"),
+        ("ChangeAssuranceContract", "ChangeAssuranceContract.js"),
+        ("ChangeAssuranceService", "ChangeAssuranceService.js"),
+        ("ChangeAssuranceFlowClient", "ChangeAssuranceFlowClient.js"),
     ]
     for name, filename in scripts:
         client.upsert(
@@ -503,6 +671,39 @@ def ensure_event(client: ServiceNowClient) -> None:
             "script": asset("AnalyzeTicket_ScriptAction.js"),
         },
         "Script Action AnalyzeTicket",
+    )
+
+
+def ensure_assurance_api(client: ServiceNowClient) -> None:
+    api_sys_id = client.upsert(
+        "sys_ws_definition",
+        f"service_id={ASSURANCE_API_ID}",
+        {
+            "name": ASSURANCE_API_NAME,
+            "service_id": ASSURANCE_API_ID,
+            "active": "true",
+            "short_description": "Authenticated Forward/Dynatrace change-assurance evidence ingress",
+            "consumes": "application/json",
+            "produces": "application/json",
+        },
+        f"Scripted REST API {ASSURANCE_API_NAME}",
+    )
+    client.upsert(
+        "sys_ws_operation",
+        f"web_service_definition={api_sys_id}^http_method=POST^relative_path={ASSURANCE_RESOURCE_PATH}",
+        {
+            "web_service_definition": api_sys_id,
+            "name": "Ingest change assurance evidence",
+            "http_method": "POST",
+            "relative_path": ASSURANCE_RESOURCE_PATH,
+            "operation_script": asset("ChangeAssuranceIngest_Resource.js"),
+            "active": "true",
+            "requires_authentication": "true",
+            "consumes": "application/json",
+            "produces": "application/json",
+            "short_description": "Validate and idempotently publish one bounded assurance evidence bundle",
+        },
+        "Scripted REST resource ingest change assurance evidence",
     )
 
 
@@ -687,11 +888,30 @@ def get_forward_credentials() -> tuple[str, str]:
 
 def verify(client: ServiceNowClient) -> None:
     fields = "sys_id,name,label"
-    for table in (TICKET_TABLE, HOP_TABLE, BINDING_TABLE, CHANGE_VALIDATION_TABLE):
-        if not client.query("sys_db_object", f"name={table}", fields=fields):
+    for table in (TICKET_TABLE, HOP_TABLE, BINDING_TABLE, CHANGE_VALIDATION_TABLE, CHANGE_ASSURANCE_TABLE):
+        table_rows = client.query("sys_db_object", f"name={table}", fields=fields + ",ws_access")
+        if not table_rows:
             raise ServiceNowError(f"verification failed: missing table {table}")
+        if table == CHANGE_ASSURANCE_TABLE and truthy(scalar(table_rows[0].get("ws_access"))):
+            raise ServiceNowError("verification failed: change assurance table allows direct web-service access")
     if not client.query("sysevent_register", f"event_name={EVENT_NAME}", fields="sys_id,event_name"):
         raise ServiceNowError(f"verification failed: missing event {EVENT_NAME}")
+    if not client.query("sys_user_role", f"name={ASSURANCE_WRITER_ROLE}", fields="sys_id,name"):
+        raise ServiceNowError(f"verification failed: missing role {ASSURANCE_WRITER_ROLE}")
+    api_rows = client.query(
+        "sys_ws_definition",
+        f"service_id={ASSURANCE_API_ID}",
+        fields="sys_id,service_id,active",
+    )
+    if not api_rows:
+        raise ServiceNowError(f"verification failed: missing Scripted REST API {ASSURANCE_API_ID}")
+    api_sys_id = str(api_rows[0].get("sys_id") or "")
+    if not client.query(
+        "sys_ws_operation",
+        f"web_service_definition={api_sys_id}^http_method=POST^relative_path={ASSURANCE_RESOURCE_PATH}",
+        fields="sys_id,active,requires_authentication",
+    ):
+        raise ServiceNowError("verification failed: missing change assurance evidence resource")
     page_rows = client.query("sp_page", f"id={PAGE_ID}", fields="sys_id,id")
     widget_sys_ids = forward_widget_sys_ids(client)
     if not page_rows:
@@ -751,6 +971,15 @@ def main() -> int:
     production_mode = truthy(env(PRODUCTION_MODE_ENV))
     forward_username, forward_password = get_forward_credentials()
     auth_profile_sys_id = env("SN_FORWARD_AUTH_PROFILE_SYS_ID")
+    assurance_worker_base_url = env("SN_ASSURANCE_WORKER_BASE_URL")
+    assurance_worker_auth_profile = env("SN_ASSURANCE_WORKER_AUTH_PROFILE_SYS_ID")
+
+    if assurance_worker_base_url and not assurance_worker_base_url.startswith("https://"):
+        raise ServiceNowError("SN_ASSURANCE_WORKER_BASE_URL must use https")
+    if assurance_worker_base_url and not re.fullmatch(r"[0-9a-f]{32}", assurance_worker_auth_profile):
+        raise ServiceNowError(
+            "SN_ASSURANCE_WORKER_AUTH_PROFILE_SYS_ID must be a 32-character sys_id when the worker is configured"
+        )
 
     client = ServiceNowClient(instance_url, sn_username, sn_password, dry_run=dry_run)
     print(f"ServiceNow instance: {instance_url}")
@@ -759,10 +988,18 @@ def main() -> int:
     ensure_tables(client)
     ensure_fields(client)
     ensure_choices(client)
-    ensure_properties(client, network_id, forward_base_url)
+    ensure_properties(
+        client,
+        network_id,
+        forward_base_url,
+        assurance_worker_base_url,
+        assurance_worker_auth_profile,
+    )
     ensure_groups(client)
+    ensure_roles(client)
     ensure_scripts(client)
     ensure_event(client)
+    ensure_assurance_api(client)
     ensure_portal(client)
     if production_mode and (forward_username or forward_password) and not auth_profile_sys_id:
         raise ServiceNowError(

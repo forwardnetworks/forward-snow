@@ -2,7 +2,7 @@
 
 This checklist is intentionally explicit so the field integration can be installed without depending on internal Forward tooling.
 
-For a normal install, run `scripts/install_servicenow_demo.py` from the package root. It creates or updates the schema, properties, groups, Script Includes, event action, Service Portal widget/page, tenant binding, and Change Request validation table. Use the manual sections below only when installing by hand.
+For a normal install, run `scripts/install_servicenow_demo.py` from the package root. It creates or updates the schema, properties, groups, roles, Script Includes, event action, authenticated assurance API, Service Portal widget/page, tenant binding, Change Request validation table, and change-assurance ledger. Use the manual sections below only when installing by hand.
 
 For production-style credential storage, create a ServiceNow Basic Auth Profile for the Forward API access key and secret, then set `SN_PRODUCTION_MODE=1` and `SN_FORWARD_AUTH_PROFILE_SYS_ID` before running the installer. Production mode refuses direct `FORWARD_USERNAME` / `FORWARD_PASSWORD` fallback credentials. Without production mode, the installer uses the lab fallback fields on `u_forward_tenant_binding`.
 
@@ -25,6 +25,9 @@ Create these Script Includes from `servicenow/assets/`:
 | `ForwardClient` | `ForwardClient.js` |
 | `PathNormalizer` | `PathNormalizer.js` |
 | `TicketAnalysis` | `TicketAnalysis.js` |
+| `ChangeAssuranceContract` | `ChangeAssuranceContract.js` |
+| `ChangeAssuranceService` | `ChangeAssuranceService.js` |
+| `ChangeAssuranceFlowClient` | `ChangeAssuranceFlowClient.js` |
 
 ## 3. Event And Script Action
 
@@ -96,3 +99,22 @@ Open the portal at:
 ## 7. Change Request Validation
 
 The portal can validate a selected path against a native `change_request`. It creates a `u_forward_change_validation` task, links it to the Change Request when a number is supplied, writes Forward evidence to the Change Request work notes, and records pass/fail based on the expected outcome.
+
+## 8. Change Assurance Evidence Ingress
+
+Create role `x_fwd_demo.assurance_writer` and assign it only to the bounded Forward-side feedback user. The installer
+creates authenticated resource:
+
+```text
+POST /api/now/forward_change_assurance/changes/{change_sys_id}/evidence
+```
+
+The Script field is `ChangeAssuranceIngest_Resource.js`. It calls `ChangeAssuranceService`, which validates the
+aggregate evidence contract, upserts `u_forward_change_assurance` by its unique idempotency key, creates the evidence
+attachment, then adds the Change Request work note.
+
+## 9. Purchase-Free Flow Designer Actions
+
+Configure `SN_ASSURANCE_WORKER_BASE_URL` and `SN_ASSURANCE_WORKER_AUTH_PROFILE_SYS_ID` before running the installer,
+then follow [flow-designer.md](flow-designer.md). The actions use `ChangeAssuranceFlowClient` from a core Script step;
+they do not require the IntegrationHub REST step.

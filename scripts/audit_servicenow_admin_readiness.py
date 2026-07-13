@@ -8,13 +8,18 @@ admins before enabling this in a production-managed instance.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any
 
 from install_servicenow_demo import (
     AUTH_PROFILE_TABLE,
+    ASSURANCE_API_ID,
+    ASSURANCE_RESOURCE_PATH,
+    ASSURANCE_WRITER_ROLE,
     BINDING_TABLE,
     CHANGE_REQUEST_TABLE,
+    CHANGE_ASSURANCE_TABLE,
     CHANGE_VALIDATION_TABLE,
     DEFAULT_FORWARD_BASE_URL,
     HOP_TABLE,
@@ -33,8 +38,15 @@ from install_servicenow_demo import (
 )
 
 
-SCRIPT_INCLUDES = ("ForwardClient", "PathNormalizer", "TicketAnalysis")
-REQUIRED_TABLES = (TICKET_TABLE, HOP_TABLE, BINDING_TABLE, CHANGE_VALIDATION_TABLE)
+SCRIPT_INCLUDES = (
+    "ForwardClient",
+    "PathNormalizer",
+    "TicketAnalysis",
+    "ChangeAssuranceContract",
+    "ChangeAssuranceService",
+    "ChangeAssuranceFlowClient",
+)
+REQUIRED_TABLES = (TICKET_TABLE, HOP_TABLE, BINDING_TABLE, CHANGE_VALIDATION_TABLE, CHANGE_ASSURANCE_TABLE)
 PLATFORM_TABLES = ("incident", CHANGE_REQUEST_TABLE, AUTH_PROFILE_TABLE)
 
 
@@ -73,6 +85,13 @@ def audit_properties(client: ServiceNowClient, report: dict[str, Any]) -> None:
     allowed = property_value(client, "x_fwd_demo.forward.allowed_base_urls")
     timeout = property_value(client, "x_fwd_demo.forward.request_timeout_ms")
     default_network = property_value(client, "x_fwd_demo.forward.default_network_id")
+    assurance_table = property_value(client, "x_fwd_demo.tables.change_assurance")
+    max_payload = property_value(client, "x_fwd_demo.assurance.max_payload_bytes")
+    worker_base_url = property_value(client, "x_fwd_demo.assurance.worker_base_url").rstrip("/")
+    worker_allowed = property_value(client, "x_fwd_demo.assurance.worker_allowed_base_urls")
+    worker_auth_profile = property_value(client, "x_fwd_demo.assurance.worker_auth_profile")
+    worker_timeout = property_value(client, "x_fwd_demo.assurance.worker_timeout_ms")
+    worker_max_payload = property_value(client, "x_fwd_demo.assurance.worker_max_payload_bytes")
 
     allowed_items = [item.strip().rstrip("/") for item in allowed.split(",") if item.strip()]
     allowed_ok = bool(allowed_items) and all(item.startswith("https://") and "*" not in item for item in allowed_items)
@@ -85,6 +104,117 @@ def audit_properties(client: ServiceNowClient, report: dict[str, Any]) -> None:
         timeout_int = 0
     check(report, "failure", "Forward API timeout", 1000 <= timeout_int <= 60000, timeout or "missing")
     check(report, "warning", "default network id", default_network.isdigit(), default_network or "missing")
+    check(
+        report,
+        "failure",
+        "change assurance table property",
+        assurance_table == CHANGE_ASSURANCE_TABLE,
+        assurance_table or "missing",
+    )
+    try:
+        max_payload_int = int(max_payload)
+    except ValueError:
+        max_payload_int = 0
+    check(
+        report,
+        "failure",
+        "assurance evidence payload bound",
+        16384 <= max_payload_int <= 1048576,
+        max_payload or "missing",
+    )
+    if not worker_base_url:
+        check(report, "warning", "assurance Flow Designer worker", False, "not configured")
+        return
+    worker_allowed_items = [item.strip().rstrip("/") for item in worker_allowed.split(",") if item.strip()]
+    check(
+        report,
+        "failure",
+        "assurance worker TLS and allowlist",
+        worker_base_url.startswith("https://") and worker_base_url in worker_allowed_items and "*" not in worker_allowed,
+        worker_base_url,
+    )
+    auth_rows = client.query(AUTH_PROFILE_TABLE, f"sys_id={worker_auth_profile}", fields="sys_id", limit=2)
+    check(
+        report,
+        "failure",
+        "assurance worker auth profile",
+        bool(re.fullmatch(r"[0-9a-f]{32}", worker_auth_profile)) and len(auth_rows) == 1,
+        "configured" if auth_rows else "missing",
+    )
+    try:
+        worker_timeout_int = int(worker_timeout)
+    except ValueError:
+        worker_timeout_int = 0
+    check(
+        report,
+        "failure",
+        "assurance worker timeout",
+        1000 <= worker_timeout_int <= 120000,
+        worker_timeout or "missing",
+    )
+    try:
+        worker_max_payload_int = int(worker_max_payload)
+    except ValueError:
+        worker_max_payload_int = 0
+    check(
+        report,
+        "failure",
+        "assurance worker payload bound",
+        16384 <= worker_max_payload_int <= 1048576,
+        worker_max_payload or "missing",
+    )
+
+
+def audit_assurance_contract(client: ServiceNowClient, report: dict[str, Any]) -> None:
+    tables = client.query(
+        "sys_db_object",
+        f"name={CHANGE_ASSURANCE_TABLE}",
+        fields="sys_id,name,ws_access",
+    )
+    direct_web_service_access = bool(tables) and ok_bool(tables[0].get("ws_access"))
+    check(
+        report,
+        "failure",
+        "assurance table direct web-service access disabled",
+        bool(tables) and not direct_web_service_access,
+        "disabled" if tables and not direct_web_service_access else "enabled or missing",
+    )
+    fields = client.query(
+        "sys_dictionary",
+        f"name={CHANGE_ASSURANCE_TABLE}^element=u_idempotency_key",
+        fields="internal_type,max_length,unique",
+    )
+    exists = bool(fields)
+    check(report, "failure", "assurance idempotency field", exists, "u_idempotency_key")
+    if not fields:
+        return
+    row = fields[0]
+    unique = ok_bool(row.get("unique"))
+    check(report, "failure", "assurance idempotency uniqueness", unique, "unique" if unique else "not unique")
+    check(
+        report,
+        "failure",
+        "assurance idempotency length",
+        scalar(row.get("max_length")) == "128",
+        scalar(row.get("max_length")) or "missing",
+    )
+    for element in (
+        "u_forward_assurance_run_id",
+        "u_forward_assurance_status",
+        "u_forward_assurance_decision",
+    ):
+        rows = client.query(
+            "sys_dictionary",
+            f"name={CHANGE_REQUEST_TABLE}^element={element}",
+            fields="element,internal_type,max_length",
+        )
+        check(
+            report,
+            "failure",
+            f"Change Request flow field {element}",
+            bool(rows),
+            element if rows else "missing",
+        )
 
 
 def audit_bindings(client: ServiceNowClient, report: dict[str, Any]) -> None:
@@ -162,6 +292,31 @@ def audit_scripts(client: ServiceNowClient, report: dict[str, Any]) -> None:
         check(report, "failure", f"Script Include {name}", active, "active" if active else "missing/inactive")
 
 
+def audit_assurance_api(client: ServiceNowClient, report: dict[str, Any]) -> None:
+    roles = client.query("sys_user_role", f"name={ASSURANCE_WRITER_ROLE}", fields="sys_id,name")
+    check(report, "failure", "assurance writer role", bool(roles), ASSURANCE_WRITER_ROLE)
+
+    apis = client.query(
+        "sys_ws_definition",
+        f"service_id={ASSURANCE_API_ID}",
+        fields="sys_id,service_id,active",
+    )
+    active_api = bool(apis) and ok_bool(apis[0].get("active"))
+    check(report, "failure", "assurance Scripted REST API", active_api, ASSURANCE_API_ID)
+    if not apis:
+        return
+    api_sys_id = scalar(apis[0].get("sys_id"))
+    operations = client.query(
+        "sys_ws_operation",
+        f"web_service_definition={api_sys_id}^http_method=POST^relative_path={ASSURANCE_RESOURCE_PATH}",
+        fields="sys_id,active,requires_authentication,relative_path,http_method",
+    )
+    active_operation = bool(operations) and ok_bool(operations[0].get("active"))
+    authenticated = bool(operations) and ok_bool(operations[0].get("requires_authentication"))
+    check(report, "failure", "assurance evidence REST resource", active_operation, ASSURANCE_RESOURCE_PATH)
+    check(report, "failure", "assurance evidence requires authentication", authenticated, "required")
+
+
 def audit_portal_init(client: ServiceNowClient, report: dict[str, Any]) -> None:
     page = fetch_sp_page(client, PAGE_ID)
     widgets = extract_widgets(page)
@@ -213,6 +368,8 @@ def main() -> int:
     audit_bindings(client, report)
     audit_portal(client, report)
     audit_scripts(client, report)
+    audit_assurance_contract(client, report)
+    audit_assurance_api(client, report)
     audit_portal_init(client, report)
 
     if json_mode:
