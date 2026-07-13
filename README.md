@@ -8,6 +8,18 @@ Forward ServiceNow Field Integration connects ServiceNow workflows with Forward 
 
 This repository is a Forward field integration package. It is not a supported Forward product, packaged app, or standard platform feature. Treat it as customer-installable integration code that field teams and ServiceNow admins can deploy, audit, operate, and adapt under the customer's normal change-control process.
 
+## Validate The Package
+
+Run the credential-free contract, installer, and audit suite before proposing or installing a change:
+
+```bash
+npm ci
+npm run validate
+```
+
+The checked pull-request workflow runs the same gate on Node `24.18.0` with Python `3.12`. It performs no ServiceNow
+or Forward API calls.
+
 ## What It Installs
 
 - ServiceNow custom task tables for Forward connectivity tickets and Change Request validations.
