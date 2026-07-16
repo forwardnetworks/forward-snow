@@ -36,6 +36,8 @@ ASSURANCE_API_NAME = "Forward Change Assurance"
 ASSURANCE_API_ID = "forward_change_assurance"
 ASSURANCE_RESOURCE_PATH = "/changes/{change_sys_id}/evidence"
 ASSURANCE_BASE_URI_PROPERTY = "x_fwd_demo.assurance.ingress_base_uri"
+CLOSE_GUARD_PROPERTY = "x_fwd_demo.assurance.enforced_close_states"
+CLOSE_GUARD_RULE = "Forward Change Assurance close guard"
 DEFAULT_FORWARD_BASE_URL = "https://fwd.app/api"
 DEFAULT_NETWORK_ID = "235937"
 AUTH_PROFILE_TABLE = "sys_auth_profile_basic"
@@ -587,6 +589,7 @@ def ensure_properties(
         "x_fwd_demo.assurance.worker_auth_profile": assurance_worker_auth_profile,
         "x_fwd_demo.assurance.worker_timeout_ms": "30000",
         "x_fwd_demo.assurance.worker_max_payload_bytes": "524288",
+        CLOSE_GUARD_PROPERTY: "3",
         "x_fwd_demo.groups.network": "Network Team",
         "x_fwd_demo.groups.security": "Security Team",
         "x_fwd_demo.groups.triage": "Triage",
@@ -630,6 +633,7 @@ def ensure_scripts(client: ServiceNowClient) -> None:
         ("ChangeAssuranceContract", "ChangeAssuranceContract.js"),
         ("ChangeAssuranceService", "ChangeAssuranceService.js"),
         ("ChangeAssuranceFlowClient", "ChangeAssuranceFlowClient.js"),
+        ("ChangeAssuranceCloseGuard", "ChangeAssuranceCloseGuard.js"),
     ]
     for name, filename in scripts:
         client.upsert(
@@ -646,6 +650,25 @@ def ensure_scripts(client: ServiceNowClient) -> None:
             },
             f"Script Include {name}",
         )
+
+
+def ensure_close_guard(client: ServiceNowClient) -> None:
+    client.upsert(
+        "sys_script",
+        f"name={CLOSE_GUARD_RULE}^collection={CHANGE_REQUEST_TABLE}",
+        {
+            "name": CLOSE_GUARD_RULE,
+            "collection": CHANGE_REQUEST_TABLE,
+            "active": "true",
+            "advanced": "true",
+            "when": "before",
+            "order": "100",
+            "action_update": "true",
+            "script": asset("ChangeAssuranceCloseGuardRule.js"),
+            "description": "Block assurance-bound change closure until Forward and Dynatrace evidence passes",
+        },
+        f"Business Rule {CLOSE_GUARD_RULE}",
+    )
 
 
 def ensure_event(client: ServiceNowClient) -> None:
@@ -920,6 +943,12 @@ def verify(client: ServiceNowClient) -> None:
         raise ServiceNowError(f"verification failed: missing event {EVENT_NAME}")
     if not client.query("sys_user_role", f"name={ASSURANCE_WRITER_ROLE}", fields="sys_id,name"):
         raise ServiceNowError(f"verification failed: missing role {ASSURANCE_WRITER_ROLE}")
+    if not client.query(
+        "sys_script",
+        f"name={CLOSE_GUARD_RULE}^collection={CHANGE_REQUEST_TABLE}^active=true",
+        fields="sys_id,name,active",
+    ):
+        raise ServiceNowError("verification failed: missing active change assurance close guard")
     api_rows = client.query(
         "sys_ws_definition",
         f"service_id={ASSURANCE_API_ID}",
@@ -1032,6 +1061,7 @@ def main() -> int:
     ensure_groups(client)
     ensure_roles(client)
     ensure_scripts(client)
+    ensure_close_guard(client)
     ensure_event(client)
     assurance_base_uri = ensure_assurance_api(client)
     ensure_portal(client)

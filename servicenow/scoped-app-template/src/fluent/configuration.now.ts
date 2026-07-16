@@ -29,3 +29,7 @@ Property({
     $id: Now.ID['worker_max_payload_bytes'], name: '__SCOPE__.assurance.worker_max_payload_bytes', type: 'integer', value: 524288,
     description: 'Maximum assurance worker request or response payload in bytes', roles: { read: [adminRole], write: [adminRole] },
 })
+Property({
+    $id: Now.ID['enforced_close_states'], name: '__SCOPE__.assurance.enforced_close_states', type: 'string', value: '3',
+    description: 'Comma-separated Change Request state values protected by the Forward Change Assurance close guard', roles: { read: [adminRole], write: [adminRole] },
+})

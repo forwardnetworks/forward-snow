@@ -88,6 +88,11 @@
       "disposition": "migrate_bounded_non_secret_value"
     },
     {
+      "source": "x_fwd_demo.assurance.enforced_close_states",
+      "logicalTarget": "assurance.enforced_close_states",
+      "disposition": "migrate_bounded_non_secret_value"
+    },
+    {
       "source": "x_fwd_demo.assurance.worker_base_url",
       "logicalTarget": "assurance_worker_connection_alias",
       "disposition": "replace_with_admin_binding"

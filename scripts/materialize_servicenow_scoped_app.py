@@ -78,6 +78,19 @@ def render_ingest(scope: str) -> str:
     return text
 
 
+def render_close_guard(scope: str) -> str:
+    text = (ASSET_ROOT / "ChangeAssuranceCloseGuard.js").read_text()
+    text = text.replace(
+        'return String(gs.getProperty("x_fwd_demo.tables.change_assurance", "u_forward_change_assurance"));',
+        f'return "{scope}_assurance";',
+    )
+    for field in ASSURANCE_FIELDS:
+        text = text.replace(f'"u_{field}"', f'"{field}"')
+    text = text.replace('"u_forward_assurance_status"', f'"{scope}_assurance_status"')
+    text = text.replace('"u_forward_assurance_decision"', f'"{scope}_assurance_decision"')
+    return text
+
+
 def render_flow_client(scope: str) -> str:
     text = (ASSET_ROOT / "ChangeAssuranceFlowClient.js").read_text()
     initialize = f'''initialize: function () {{
@@ -166,6 +179,7 @@ def write_sdk_sources(output: Path, scope: str) -> None:
     (server / "ChangeAssuranceService.server.js").write_text(render_service(scope))
     (server / "ChangeAssuranceFlowClient.server.js").write_text(render_flow_client(scope))
     (server / "ChangeAssuranceIngest.server.js").write_text(render_ingest(scope))
+    (server / "ChangeAssuranceCloseGuard.server.js").write_text(render_close_guard(scope))
 
 
 def materialize(scope: str, output: Path, *, install_dependencies: bool) -> None:

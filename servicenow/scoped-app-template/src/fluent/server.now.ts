@@ -25,6 +25,12 @@ ScriptInclude({
     accessibleFrom: 'package_private', protectionPolicy: 'read',
     script: Now.include('../server/ChangeAssuranceMigration.server.js'),
 })
+ScriptInclude({
+    $id: Now.ID['change_assurance_close_guard'], name: 'ChangeAssuranceCloseGuard',
+    apiName: '__SCOPE__.ChangeAssuranceCloseGuard', active: true, clientCallable: false,
+    accessibleFrom: 'package_private', protectionPolicy: 'read',
+    script: Now.include('../server/ChangeAssuranceCloseGuard.server.js'),
+})
 
 const evidenceRestAcl = Acl({
     $id: Now.ID['evidence_rest_acl'], name: 'forward_change_assurance_evidence',

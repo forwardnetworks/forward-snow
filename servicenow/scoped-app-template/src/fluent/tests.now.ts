@@ -25,7 +25,7 @@ Test(
         role.query();
         expect(role.next()).toBe(true);
       });
-      ['ChangeAssuranceContract', 'ChangeAssuranceService', 'ChangeAssuranceFlowClient', 'ChangeAssuranceMigration'].forEach(function (name) {
+      ['ChangeAssuranceContract', 'ChangeAssuranceService', 'ChangeAssuranceFlowClient', 'ChangeAssuranceMigration', 'ChangeAssuranceCloseGuard'].forEach(function (name) {
         var include = new GlideRecord('sys_script_include');
         include.addQuery('name', name);
         include.addQuery('sys_scope.scope', '__SCOPE__');
@@ -33,6 +33,14 @@ Test(
         include.query();
         expect(include.next()).toBe(true);
       });
+      var closeGuard = new GlideRecord('sys_script');
+      closeGuard.addQuery('name', 'Forward Change Assurance close guard');
+      closeGuard.addQuery('collection', 'change_request');
+      closeGuard.addQuery('sys_scope.scope', '__SCOPE__');
+      closeGuard.addQuery('active', true);
+      closeGuard.setLimit(1);
+      closeGuard.query();
+      expect(closeGuard.next()).toBe(true);
     });
     it('does not install legacy credential properties', function () {
       var property = new GlideRecord('sys_properties');
