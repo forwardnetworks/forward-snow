@@ -53,6 +53,48 @@ def base_properties() -> dict[str, str]:
 
 
 class AuditReadinessTests(unittest.TestCase):
+    def test_assurance_api_requires_authoritative_base_uri_property(self) -> None:
+        class AssuranceApiClient:
+            def __init__(self, configured_base_uri: str) -> None:
+                self.configured_base_uri = configured_base_uri
+
+            def query(
+                self,
+                table: str,
+                query: str,
+                *,
+                fields: str = "sys_id",
+                limit: int = 1,
+            ) -> list[dict[str, Any]]:
+                if table == "sys_user_role":
+                    return [{"sys_id": "role", "name": audit.ASSURANCE_WRITER_ROLE}]
+                if table == "sys_ws_definition":
+                    return [{
+                        "sys_id": "api",
+                        "service_id": audit.ASSURANCE_API_ID,
+                        "base_uri": "/api/tenant_namespace/forward_change_assurance",
+                        "active": "true",
+                    }]
+                if table == "sys_properties":
+                    return [{"name": audit.ASSURANCE_BASE_URI_PROPERTY, "value": self.configured_base_uri}]
+                if table == "sys_ws_operation":
+                    return [{"sys_id": "operation", "active": "true", "requires_authentication": "true"}]
+                return []
+
+        ready = report()
+        audit.audit_assurance_api(
+            AssuranceApiClient("/api/tenant_namespace/forward_change_assurance"),  # type: ignore[arg-type]
+            ready,
+        )
+        self.assertEqual(ready["summary"]["failures"], 0)
+
+        mismatched = report()
+        audit.audit_assurance_api(
+            AssuranceApiClient("/api/now/forward_change_assurance"),  # type: ignore[arg-type]
+            mismatched,
+        )
+        self.assertEqual(mismatched["summary"]["failures"], 1)
+
     def test_purchase_free_worker_configuration_passes(self) -> None:
         result = report()
         audit.audit_properties(PropertyClient(base_properties()), result)  # type: ignore[arg-type]

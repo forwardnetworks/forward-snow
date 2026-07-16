@@ -35,6 +35,7 @@ ASSURANCE_WRITER_ROLE = "x_fwd_demo.assurance_writer"
 ASSURANCE_API_NAME = "Forward Change Assurance"
 ASSURANCE_API_ID = "forward_change_assurance"
 ASSURANCE_RESOURCE_PATH = "/changes/{change_sys_id}/evidence"
+ASSURANCE_BASE_URI_PROPERTY = "x_fwd_demo.assurance.ingress_base_uri"
 DEFAULT_FORWARD_BASE_URL = "https://fwd.app/api"
 DEFAULT_NETWORK_ID = "235937"
 AUTH_PROFILE_TABLE = "sys_auth_profile_basic"
@@ -580,6 +581,7 @@ def ensure_properties(
         "x_fwd_demo.tables.change_assurance": CHANGE_ASSURANCE_TABLE,
         "x_fwd_demo.assurance.max_payload_bytes": "262144",
         "x_fwd_demo.assurance.writer_role": ASSURANCE_WRITER_ROLE,
+        ASSURANCE_BASE_URI_PROPERTY: "",
         "x_fwd_demo.assurance.worker_base_url": worker_base_url,
         "x_fwd_demo.assurance.worker_allowed_base_urls": worker_base_url,
         "x_fwd_demo.assurance.worker_auth_profile": assurance_worker_auth_profile,
@@ -674,7 +676,7 @@ def ensure_event(client: ServiceNowClient) -> None:
     )
 
 
-def ensure_assurance_api(client: ServiceNowClient) -> None:
+def ensure_assurance_api(client: ServiceNowClient) -> str:
     api_sys_id = client.upsert(
         "sys_ws_definition",
         f"service_id={ASSURANCE_API_ID}",
@@ -705,6 +707,26 @@ def ensure_assurance_api(client: ServiceNowClient) -> None:
         },
         "Scripted REST resource ingest change assurance evidence",
     )
+    definitions = client.query(
+        "sys_ws_definition",
+        f"sys_id={api_sys_id}",
+        fields="sys_id,base_uri",
+        limit=2,
+    )
+    base_uri = scalar(definitions[0].get("base_uri")) if len(definitions) == 1 else ""
+    if base_uri.startswith("/api/"):
+        client.upsert(
+            "sys_properties",
+            f"name={ASSURANCE_BASE_URI_PROPERTY}",
+            {
+                "name": ASSURANCE_BASE_URI_PROPERTY,
+                "value": base_uri.rstrip("/"),
+                "type": "string",
+                "description": "Authoritative ServiceNow Scripted REST base URI for assurance feedback",
+            },
+            f"property {ASSURANCE_BASE_URI_PROPERTY}",
+        )
+    return base_uri.rstrip("/")
 
 
 def ensure_portal(client: ServiceNowClient) -> None:
@@ -901,17 +923,29 @@ def verify(client: ServiceNowClient) -> None:
     api_rows = client.query(
         "sys_ws_definition",
         f"service_id={ASSURANCE_API_ID}",
-        fields="sys_id,service_id,active",
+        fields="sys_id,service_id,base_uri,active",
     )
     if not api_rows:
         raise ServiceNowError(f"verification failed: missing Scripted REST API {ASSURANCE_API_ID}")
     api_sys_id = str(api_rows[0].get("sys_id") or "")
+    authoritative_base_uri = scalar(api_rows[0].get("base_uri"))
     if not client.query(
         "sys_ws_operation",
         f"web_service_definition={api_sys_id}^http_method=POST^relative_path={ASSURANCE_RESOURCE_PATH}",
         fields="sys_id,active,requires_authentication",
     ):
         raise ServiceNowError("verification failed: missing change assurance evidence resource")
+    base_uri_property = client.query(
+        "sys_properties",
+        f"name={ASSURANCE_BASE_URI_PROPERTY}",
+        fields="sys_id,name,value",
+    )
+    if (
+        len(base_uri_property) != 1
+        or not authoritative_base_uri.startswith("/api/")
+        or scalar(base_uri_property[0].get("value")) != authoritative_base_uri.rstrip("/")
+    ):
+        raise ServiceNowError("verification failed: assurance ingress base URI property is not authoritative")
     page_rows = client.query("sp_page", f"id={PAGE_ID}", fields="sys_id,id")
     widget_sys_ids = forward_widget_sys_ids(client)
     if not page_rows:
@@ -999,7 +1033,7 @@ def main() -> int:
     ensure_roles(client)
     ensure_scripts(client)
     ensure_event(client)
-    ensure_assurance_api(client)
+    assurance_base_uri = ensure_assurance_api(client)
     ensure_portal(client)
     if production_mode and (forward_username or forward_password) and not auth_profile_sys_id:
         raise ServiceNowError(
@@ -1021,6 +1055,8 @@ def main() -> int:
     if not dry_run:
         verify(client)
     print("ServiceNow field integration install complete")
+    if assurance_base_uri:
+        print(f"Assurance ingress base URI: {assurance_base_uri}")
     print(f"Portal URL: {instance_url}/sp?id={PAGE_ID}")
     return 0
 

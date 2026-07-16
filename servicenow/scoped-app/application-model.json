@@ -1,0 +1,253 @@
+{
+  "schemaVersion": "forward-servicenow-scoped-app-model/v1",
+  "identity": {
+    "displayName": "Forward Change Assurance",
+    "packageName": "forward-change-assurance",
+    "vendorPrefix": null,
+    "scope": null,
+    "scopeStatus": "pending_build_partner_registration",
+    "version": "0.1.0"
+  },
+  "distributionEditions": [
+    {
+      "name": "customer_managed",
+      "availableBeforeForwardStoreCertification": true,
+      "scopeOwner": "customer",
+      "promotionChannel": "customer_application_repository",
+      "sourceDelivery": "versioned_sdk_source_kit"
+    },
+    {
+      "name": "forward_store",
+      "availableBeforeForwardStoreCertification": false,
+      "scopeOwner": "forward",
+      "promotionChannel": "servicenow_store",
+      "sourceDelivery": "certified_store_application"
+    }
+  ],
+  "platform": {
+    "sourceOfTruth": "servicenow-sdk-fluent",
+    "requiredTables": [
+      "change_request",
+      "sys_attachment"
+    ],
+    "integrationHubSpokesRequired": false,
+    "runtimeCredentialValuesPackaged": false
+  },
+  "roles": [
+    {
+      "logicalName": "admin",
+      "purpose": "Configure aliases, policy, retention, and migrations"
+    },
+    {
+      "logicalName": "operator",
+      "purpose": "Start and complete assurance from an authorized Change Request"
+    },
+    {
+      "logicalName": "evidence_writer",
+      "purpose": "Submit bounded checksum-validated evidence to the scripted REST resource"
+    },
+    {
+      "logicalName": "auditor",
+      "purpose": "Read ledger, decision, work-note marker, and retained evidence"
+    }
+  ],
+  "tables": [
+    {
+      "logicalName": "assurance_ledger",
+      "extends": "task",
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "evidence_writer"
+      ],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": [
+        "idempotency_key"
+      ]
+    },
+    {
+      "logicalName": "path_validation",
+      "extends": "task",
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "operator"
+      ],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": []
+    }
+  ],
+  "changeRequestCorrelation": [
+    {
+      "logicalName": "assurance_run_id",
+      "type": "string",
+      "maximumLength": 64
+    },
+    {
+      "logicalName": "assurance_status",
+      "type": "choice",
+      "values": [
+        "not_started",
+        "start_queued",
+        "start_running",
+        "baseline_captured",
+        "complete_queued",
+        "complete_running",
+        "completed",
+        "blocked",
+        "failed"
+      ]
+    },
+    {
+      "logicalName": "assurance_decision",
+      "type": "choice",
+      "values": [
+        "pending",
+        "pass",
+        "warn",
+        "fail"
+      ]
+    }
+  ],
+  "connectionAliases": [
+    {
+      "logicalName": "assurance_worker",
+      "required": true,
+      "authentication": "customer_bound_credential_alias",
+      "allowedOrigins": "exact_https_origin",
+      "credentialValuesPackaged": false
+    },
+    {
+      "logicalName": "forward_api",
+      "required": false,
+      "authentication": "customer_bound_credential_alias",
+      "allowedOrigins": "exact_https_origin",
+      "credentialValuesPackaged": false
+    }
+  ],
+  "properties": [
+    {
+      "logicalName": "assurance.max_payload_bytes",
+      "type": "integer",
+      "secret": false,
+      "default": 262144,
+      "minimum": 1024,
+      "maximum": 1048576
+    },
+    {
+      "logicalName": "assurance.worker_timeout_ms",
+      "type": "integer",
+      "secret": false,
+      "default": 30000,
+      "minimum": 1000,
+      "maximum": 60000
+    },
+    {
+      "logicalName": "assurance.worker_max_payload_bytes",
+      "type": "integer",
+      "secret": false,
+      "default": 524288,
+      "minimum": 1024,
+      "maximum": 1048576
+    }
+  ],
+  "scriptIncludes": [
+    {
+      "logicalName": "ChangeAssuranceContract",
+      "clientCallable": false,
+      "purpose": "Strict parsing, bounds, canonical hashes, and work-note rendering"
+    },
+    {
+      "logicalName": "ChangeAssuranceService",
+      "clientCallable": false,
+      "purpose": "Idempotent ledger, attachment, and Change Request publication"
+    },
+    {
+      "logicalName": "ChangeAssuranceFlowClient",
+      "clientCallable": false,
+      "purpose": "Bounded worker calls through packaged connection and credential aliases"
+    },
+    {
+      "logicalName": "ChangeAssuranceMigration",
+      "clientCallable": false,
+      "purpose": "Explicit idempotent legacy evidence migration without credential copy"
+    }
+  ],
+  "restResources": [
+    {
+      "logicalName": "change_assurance_evidence",
+      "method": "POST",
+      "relativePath": "/changes/{change_sys_id}/evidence",
+      "authenticationRequired": true,
+      "requiredRole": "evidence_writer",
+      "checksumHeaderRequired": true
+    }
+  ],
+  "flowActions": [
+    {
+      "logicalName": "start_change_assurance",
+      "operation": "start"
+    },
+    {
+      "logicalName": "get_change_assurance_status",
+      "operation": "status"
+    },
+    {
+      "logicalName": "complete_change_assurance",
+      "operation": "complete"
+    }
+  ],
+  "subflows": [
+    {
+      "logicalName": "capture_forward_baseline",
+      "terminalStates": [
+        "baseline_captured",
+        "blocked",
+        "failed"
+      ]
+    },
+    {
+      "logicalName": "evaluate_change_completion",
+      "terminalStates": [
+        "completed",
+        "blocked",
+        "failed"
+      ]
+    },
+    {
+      "logicalName": "publish_assurance_decision",
+      "terminalStates": [
+        "published",
+        "failed"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "logicalName": "forward_change_assurance_gate",
+      "trigger": "authorized_change_request_transition",
+      "autoApprove": false,
+      "autoRemediate": false,
+      "changeExecutorOwned": false
+    }
+  ],
+  "automatedTests": [
+    "install_and_default_acl",
+    "worker_alias_readiness"
+  ],
+  "storeTransition": {
+    "inPlaceUpgrade": false,
+    "requiresExplicitMigration": true,
+    "copyCredentialValues": false,
+    "freezeLegacyWritersBeforeMigration": true,
+    "administratorRetirementApprovalRequired": true
+  }
+}

@@ -24,7 +24,7 @@ ChangeAssuranceService.prototype = {
     }
 
     var change = this._loadChange(normalized.changeSysId, normalized.changeNumber);
-    var evidenceSha256 = new GlideDigest().getSHA256Hex(parsed.text);
+    var evidenceSha256 = String(new GlideDigest().getSHA256Hex(parsed.text)).toLowerCase();
     if (String(expectedEvidenceSha256 || "") !== evidenceSha256) {
       throw this._error(400, "assurance evidence SHA-256 header does not match request body");
     }
@@ -98,7 +98,7 @@ ChangeAssuranceService.prototype = {
   },
 
   _ensurePublication: function (record, change, value, payloadText, evidenceSha256, idempotencyKey) {
-    var fileName = "forward-dynatrace-change-assurance-" + evidenceSha256 + ".json";
+    var fileName = "fwd-dt-assurance-" + evidenceSha256 + ".json";
     var attachmentSysId = this._existingAttachment(record.getUniqueValue(), fileName);
     var attachmentStatus = attachmentSysId ? "existing" : "created";
     try {

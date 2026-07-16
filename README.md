@@ -44,6 +44,10 @@ or Forward API calls.
 | `servicenow/setup/schema.md` | Tables, fields, choices, and system properties. |
 | `servicenow/setup/flow-designer.md` | Purchase-free Workflow Studio actions using core Script steps. |
 | `docs/change-assurance-blue-sky.md` | ServiceNow-native Forward/Dynatrace change-assurance target workflow and phased plan. |
+| `docs/scoped-application-roadmap.md` | Source-controlled scoped-app, App Repository, and Store certification migration plan. |
+| `docs/servicenow-partner-release-gate.md` | Build Partner onboarding and Store release prerequisites. |
+| `docs/customer-managed-scoped-app.md` | Pre-Store customer-owned scoped-app deployment and later Store transition. |
+| `servicenow/scoped-app/` | Scope-neutral application model and executable legacy migration contract. |
 | `servicenow/nqe/` | Forward NQE source for CMDB export. |
 | `scripts/install_servicenow_demo.py` | Idempotent ServiceNow installer. Name retained for compatibility. |
 | `scripts/configure_forward_integrations.py` | Idempotent Forward ticketing and CMDB installer. |

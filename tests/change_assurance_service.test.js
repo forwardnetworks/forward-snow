@@ -26,7 +26,7 @@ const loadService = (payloadText, globals = {}) => {
       this.workNote = () => "bounded work note";
     },
     GlideDigest: function GlideDigest() {
-      this.getSHA256Hex = (value) => createHash("sha256").update(value).digest("hex");
+      this.getSHA256Hex = (value) => createHash("sha256").update(value).digest("hex").toUpperCase();
     },
     gs: { getProperty: (_name, fallback) => fallback },
     module: { exports: {} },
@@ -65,11 +65,13 @@ test("rejects a digest header that does not match the exact request body", () =>
 test("publishes attachment before work note and reuses both identifiers on retry", () => {
   const events = [];
   let attachmentSysId = "";
+  let attachmentFileName = "";
   let workNoteSysId = "";
   const ChangeAssuranceService = loadService("{}", {
     GlideSysAttachment: function GlideSysAttachment() {
-      this.write = () => {
+      this.write = (_record, fileName) => {
         events.push("attachment:write");
+        attachmentFileName = fileName;
         attachmentSysId = "attachment-sys-id";
         return attachmentSysId;
       };
@@ -108,6 +110,8 @@ test("publishes attachment before work note and reuses both identifiers on retry
   assert.ok(events.indexOf("ledger:attachment_ready") < events.indexOf("work-note:write"));
   assert.equal(fields.u_publication_status, "published");
   assert.equal(fields.u_publication_error, "");
+  assert.equal(attachmentFileName, `fwd-dt-assurance-${digest}.json`);
+  assert.ok(attachmentFileName.length <= 100);
 
   const writesBeforeRetry = events.filter((event) => event.endsWith(":write")).length;
   const second = service._ensurePublication(record, change, value, "{}", digest, key);

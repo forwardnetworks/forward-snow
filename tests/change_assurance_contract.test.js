@@ -4,14 +4,27 @@ const test = require("node:test");
 
 global.GlideDigest = class GlideDigest {
   getSHA256Hex(value) {
-    return createHash("sha256").update(value).digest("hex");
+    // ServiceNow returns uppercase hexadecimal from GlideDigest.
+    return createHash("sha256").update(value).digest("hex").toUpperCase();
   }
 };
 
 const ChangeAssuranceContract = require("../servicenow/assets/ChangeAssuranceContract.js");
 
 const hash = (character) => character.repeat(64);
-const canonicalHash = (value) => createHash("sha256").update(`${JSON.stringify(value, null, 2)}\n`).digest("hex");
+const canonicalHash = (value) => {
+  const normalize = (item) => {
+    if (Array.isArray(item)) return item.map(normalize);
+    if (!item || typeof item !== "object") return item;
+    return Object.fromEntries(Object.keys(item).sort().map((key) => [key, normalize(item[key])]));
+  };
+  return createHash("sha256").update(JSON.stringify(normalize(value))).digest("hex");
+};
+const reverseObjectKeys = (value) => {
+  if (Array.isArray(value)) return value.map(reverseObjectKeys);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).reverse().map((key) => [key, reverseObjectKeys(value[key])]));
+};
 
 const fixture = (overrides = {}) => {
   const serviceEntityIds = ["SERVICE-CHECKOUT", "SERVICE-PAYMENTS"];
@@ -252,6 +265,29 @@ test("rejects values that cannot fit the persisted ServiceNow fields", () => {
   const problemCount = fixture();
   problemCount.dynatrace.openProblemCount = 2147483648;
   assert.throws(() => contract.parse(problemCount), /non-negative integer/);
+});
+
+test("accepts signed path-count deltas for regressions and recoveries", () => {
+  const contract = new ChangeAssuranceContract();
+  const regression = fixture();
+  regression.gate.forward.delta.reachable = -1;
+  regression.gate.forward.delta.blocked = 1;
+  regression.lineage.gateSha256 = canonicalHash(regression.gate);
+  assert.doesNotThrow(() => contract.parse(regression));
+
+  const recovery = fixture();
+  recovery.gate.forward.delta.reachable = 1;
+  recovery.gate.forward.delta.blocked = -1;
+  recovery.lineage.gateSha256 = canonicalHash(recovery.gate);
+  assert.doesNotThrow(() => contract.parse(recovery));
+});
+
+test("accepts lineage after ServiceNow reorders decoded object keys", () => {
+  const contract = new ChangeAssuranceContract();
+  const reordered = fixture();
+  reordered.preflight = reverseObjectKeys(reordered.preflight);
+  reordered.gate = reverseObjectKeys(reordered.gate);
+  assert.doesNotThrow(() => contract.parse(reordered));
 });
 
 test("rejects partial or extended embedded contract documents", () => {

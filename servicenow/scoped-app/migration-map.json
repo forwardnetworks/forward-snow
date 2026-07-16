@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "forward-servicenow-scoped-app-migration/v1",
+  "application": {
+    "displayName": "Forward Change Assurance",
+    "permanentScope": null,
+    "scopeRequirements": {
+      "registeredVendorPrefixRequired": true,
+      "pattern": "^x_[a-z0-9_]+$",
+      "maximumLength": 18
+    },
+    "sourceOfTruth": "servicenow-sdk-fluent",
+    "externalDistribution": "servicenow-store",
+    "internalPromotion": "application-repository"
+  },
+  "legacyTables": [
+    {
+      "source": "u_forward_change_assurance",
+      "logicalTarget": "assurance_ledger",
+      "disposition": "copy_then_read_only",
+      "copyData": true,
+      "retentionClass": "audit_evidence",
+      "notes": "Copy records and checksum-bound attachment references idempotently; never delete automatically."
+    },
+    {
+      "source": "u_forward_change_validation",
+      "logicalTarget": "path_validation",
+      "disposition": "copy_then_read_only",
+      "copyData": true,
+      "retentionClass": "audit_evidence",
+      "notes": "Retain path-level evidence used by the aggregate assurance decision."
+    },
+    {
+      "source": "u_forward_connectivity_ticket",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only",
+      "copyData": false,
+      "retentionClass": "legacy_operational_data",
+      "notes": "The connectivity portal is not part of the Change Assurance customer application."
+    },
+    {
+      "source": "u_forward_connectivity_hop",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only",
+      "copyData": false,
+      "retentionClass": "legacy_operational_data",
+      "notes": "The connectivity portal is not part of the Change Assurance customer application."
+    },
+    {
+      "source": "u_forward_tenant_binding",
+      "logicalTarget": "forward_connection_alias_binding",
+      "disposition": "replace_without_data_copy",
+      "copyData": false,
+      "retentionClass": "security_sensitive_legacy_configuration",
+      "notes": "Do not copy usernames, passwords, auth-profile sys_ids, or instance URLs. An administrator binds the packaged alias after install."
+    }
+  ],
+  "changeRequestCorrelation": [
+    {
+      "source": "change_request.u_forward_assurance_run_id",
+      "logicalTarget": "change_request.assurance_run_id",
+      "copyData": true
+    },
+    {
+      "source": "change_request.u_forward_assurance_status",
+      "logicalTarget": "change_request.assurance_status",
+      "copyData": true
+    },
+    {
+      "source": "change_request.u_forward_assurance_decision",
+      "logicalTarget": "change_request.assurance_decision",
+      "copyData": true
+    }
+  ],
+  "legacyProperties": [
+    {
+      "source": "x_fwd_demo.assurance.max_payload_bytes",
+      "logicalTarget": "assurance.max_payload_bytes",
+      "disposition": "migrate_bounded_non_secret_value"
+    },
+    {
+      "source": "x_fwd_demo.assurance.worker_timeout_ms",
+      "logicalTarget": "assurance.worker_timeout_ms",
+      "disposition": "migrate_bounded_non_secret_value"
+    },
+    {
+      "source": "x_fwd_demo.assurance.worker_max_payload_bytes",
+      "logicalTarget": "assurance.worker_max_payload_bytes",
+      "disposition": "migrate_bounded_non_secret_value"
+    },
+    {
+      "source": "x_fwd_demo.assurance.worker_base_url",
+      "logicalTarget": "assurance_worker_connection_alias",
+      "disposition": "replace_with_admin_binding"
+    },
+    {
+      "source": "x_fwd_demo.assurance.worker_allowed_base_urls",
+      "logicalTarget": "assurance_worker_connection_alias",
+      "disposition": "replace_with_admin_binding"
+    },
+    {
+      "source": "x_fwd_demo.assurance.worker_auth_profile",
+      "logicalTarget": "assurance_worker_credential_alias",
+      "disposition": "replace_with_admin_binding"
+    },
+    {
+      "source": "x_fwd_demo.assurance.ingress_base_uri",
+      "logicalTarget": "packaged_rest_resource",
+      "disposition": "recompute_after_install"
+    },
+    {
+      "source": "x_fwd_demo.assurance.writer_role",
+      "logicalTarget": "evidence_writer_role",
+      "disposition": "replace_with_packaged_metadata"
+    },
+    {
+      "source": "x_fwd_demo.tables.change_assurance",
+      "logicalTarget": "assurance_ledger",
+      "disposition": "replace_with_packaged_metadata"
+    },
+    {
+      "source": "x_fwd_demo.tables.change_validation",
+      "logicalTarget": "path_validation",
+      "disposition": "replace_with_packaged_metadata"
+    },
+    {
+      "source": "x_fwd_demo.forward.allowed_base_urls",
+      "logicalTarget": "forward_connection_alias",
+      "disposition": "replace_with_admin_binding"
+    },
+    {
+      "source": "x_fwd_demo.forward.request_timeout_ms",
+      "logicalTarget": "forward.request_timeout_ms",
+      "disposition": "migrate_bounded_non_secret_value"
+    },
+    {
+      "source": "x_fwd_demo.forward.default_network_id",
+      "logicalTarget": "forward_network_binding",
+      "disposition": "replace_with_admin_binding"
+    },
+    {
+      "source": "x_fwd_demo.forward.max_results",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.cmdb.ci_table",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.cmdb.max_cis",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.tables.ticket",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.tables.hop",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.tables.binding",
+      "logicalTarget": "forward_connection_alias_binding",
+      "disposition": "replace_without_data_copy"
+    },
+    {
+      "source": "x_fwd_demo.groups.network",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.groups.security",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "x_fwd_demo.groups.triage",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    }
+  ],
+  "legacyMetadata": [
+    {
+      "source": "x_fwd_demo.assurance_writer",
+      "logicalTarget": "evidence_writer_role",
+      "disposition": "replace_with_packaged_metadata"
+    },
+    {
+      "source": "x_fwd_demo.analyze_ticket",
+      "logicalTarget": null,
+      "disposition": "legacy_package_only"
+    },
+    {
+      "source": "forward_change_assurance",
+      "logicalTarget": "change_assurance_evidence_api",
+      "disposition": "replace_with_packaged_metadata"
+    }
+  ],
+  "migrationSafety": {
+    "idempotent": true,
+    "copyCredentialValues": false,
+    "deleteLegacyRecordsAutomatically": false,
+    "allowConcurrentWriters": false,
+    "requireAdministratorRetirementApproval": true
+  }
+}

@@ -186,6 +186,28 @@ class InstallerContractTests(unittest.TestCase):
         self.assertEqual(operation["requires_authentication"], "true")
         self.assertIn("ChangeAssuranceService", str(operation["operation_script"]))
 
+    def test_authoritative_assurance_base_uri_is_persisted(self) -> None:
+        class BaseUriClient(CaptureClient):
+            dry_run = False
+
+            def query(self, table, query, *, fields="sys_id", limit=1):
+                if table == "sys_ws_definition" and query == "sys_id=sys_id":
+                    return [{"sys_id": "sys_id", "base_uri": "/api/tenant_scope/forward_change_assurance"}]
+                return super().query(table, query, fields=fields, limit=limit)
+
+        client = BaseUriClient()
+        base_uri = installer.ensure_assurance_api(client)  # type: ignore[arg-type]
+        self.assertEqual(base_uri, "/api/tenant_scope/forward_change_assurance")
+        properties = {
+            str(payload["name"]): payload["value"]
+            for table, _query, payload, _label in client.calls
+            if table == "sys_properties"
+        }
+        self.assertEqual(
+            properties[installer.ASSURANCE_BASE_URI_PROPERTY],
+            "/api/tenant_scope/forward_change_assurance",
+        )
+
     def test_assurance_assets_are_present(self) -> None:
         self.assertIn("ChangeAssuranceContract", installer.asset("ChangeAssuranceContract.js"))
         self.assertIn("ChangeAssuranceService", installer.asset("ChangeAssuranceService.js"))

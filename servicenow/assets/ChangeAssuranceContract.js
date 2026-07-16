@@ -397,7 +397,7 @@ ChangeAssuranceContract.prototype = {
 
     this._pathSummary(forward.before, "embedded gate before");
     this._pathSummary(forward.after, "embedded gate after");
-    this._integerObject(
+    this._signedIntegerObject(
       forward.delta,
       ["reachable", "blocked", "ambiguous", "unmapped", "failed"],
       "embedded gate delta"
@@ -476,17 +476,46 @@ ChangeAssuranceContract.prototype = {
   },
 
   _validateEmbeddedHashes: function (preflight, gate, preflightSha256, gateSha256) {
-    if (this._sha256Text(preflight) !== preflightSha256) {
-      throw new Error("embedded preflight SHA-256 does not match lineage");
+    var actualPreflightSha256 = this._sha256Text(preflight);
+    if (actualPreflightSha256 !== preflightSha256) {
+      throw new Error(
+        "embedded preflight SHA-256 does not match lineage (expected " +
+        preflightSha256 + ", computed " + actualPreflightSha256 + ")"
+      );
     }
-    if (this._sha256Text(gate) !== gateSha256) {
-      throw new Error("embedded gate SHA-256 does not match lineage");
+    var actualGateSha256 = this._sha256Text(gate);
+    if (actualGateSha256 !== gateSha256) {
+      throw new Error(
+        "embedded gate SHA-256 does not match lineage (expected " +
+        gateSha256 + ", computed " + actualGateSha256 + ")"
+      );
     }
   },
 
   _sha256Text: function (value) {
     if (typeof GlideDigest === "undefined") throw new Error("SHA-256 validation is unavailable");
-    return String(new GlideDigest().getSHA256Hex(JSON.stringify(value, null, 2) + "\n"));
+    // Hash compact sorted JSON so the digest does not depend on differences in
+    // pretty-print support between ServiceNow's Rhino runtime and Node.js.
+    return String(new GlideDigest().getSHA256Hex(JSON.stringify(this._sortForHash(value)))).toLowerCase();
+  },
+
+  _sortForHash: function (value) {
+    if (Array.isArray(value)) {
+      var items = [];
+      for (var i = 0; i < value.length; i++) items.push(this._sortForHash(value[i]));
+      return items;
+    }
+    if (!this._isObject(value)) return value;
+    var keys = [];
+    for (var key in value) {
+      if (value.hasOwnProperty(key)) keys.push(key);
+    }
+    keys.sort();
+    var sorted = {};
+    for (var j = 0; j < keys.length; j++) {
+      sorted[keys[j]] = this._sortForHash(value[keys[j]]);
+    }
+    return sorted;
   },
 
   _rejectUnsafeContent: function (value, depth) {
@@ -569,6 +598,20 @@ ChangeAssuranceContract.prototype = {
     this._assertKnownKeys(item, allowed, label);
     for (var j = 0; j < keys.length; j++) {
       this._nonnegativeInteger(item[keys[j]], label + " " + keys[j]);
+    }
+  },
+
+  _signedIntegerObject: function (value, keys, label) {
+    var item = this._object(value, label);
+    var allowed = {};
+    for (var i = 0; i < keys.length; i++) allowed[keys[i]] = true;
+    this._assertKnownKeys(item, allowed, label);
+    for (var j = 0; j < keys.length; j++) {
+      var candidate = item[keys[j]];
+      if (typeof candidate !== "number" || !isFinite(candidate) || Math.floor(candidate) !== candidate ||
+          candidate < -2147483648 || candidate > 2147483647) {
+        throw new Error(label + " " + keys[j] + " must be a signed integer");
+      }
     }
   },
 

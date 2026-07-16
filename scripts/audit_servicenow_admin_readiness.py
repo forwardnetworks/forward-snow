@@ -15,6 +15,7 @@ from typing import Any
 from install_servicenow_demo import (
     AUTH_PROFILE_TABLE,
     ASSURANCE_API_ID,
+    ASSURANCE_BASE_URI_PROPERTY,
     ASSURANCE_RESOURCE_PATH,
     ASSURANCE_WRITER_ROLE,
     BINDING_TABLE,
@@ -299,13 +300,22 @@ def audit_assurance_api(client: ServiceNowClient, report: dict[str, Any]) -> Non
     apis = client.query(
         "sys_ws_definition",
         f"service_id={ASSURANCE_API_ID}",
-        fields="sys_id,service_id,active",
+        fields="sys_id,service_id,base_uri,active",
     )
     active_api = bool(apis) and ok_bool(apis[0].get("active"))
     check(report, "failure", "assurance Scripted REST API", active_api, ASSURANCE_API_ID)
     if not apis:
         return
     api_sys_id = scalar(apis[0].get("sys_id"))
+    base_uri = scalar(apis[0].get("base_uri")).rstrip("/")
+    configured_base_uri = property_value(client, ASSURANCE_BASE_URI_PROPERTY).rstrip("/")
+    check(
+        report,
+        "failure",
+        "assurance ingress base URI",
+        base_uri.startswith("/api/") and configured_base_uri == base_uri,
+        configured_base_uri or "missing",
+    )
     operations = client.query(
         "sys_ws_operation",
         f"web_service_definition={api_sys_id}^http_method=POST^relative_path={ASSURANCE_RESOURCE_PATH}",

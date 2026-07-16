@@ -18,6 +18,9 @@ python3 scripts/install_servicenow_demo.py
 ```
 
 The installer writes an exact origin allowlist. It never stores worker credentials in a custom table or property.
+It also records the Scripted REST API's authoritative, ServiceNow-assigned `base_uri` in
+`x_fwd_demo.assurance.ingress_base_uri`; configure the Forward-side conductor from that non-secret value rather than
+assuming the global `/api/now/...` namespace.
 
 ## Action 1: Start Forward Change Assurance
 

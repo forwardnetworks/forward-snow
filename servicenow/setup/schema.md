@@ -159,6 +159,7 @@ The package supports global custom tables (`u_*`). Some server code can read sco
 | `x_fwd_demo.tables.change_assurance` | `u_forward_change_assurance` |
 | `x_fwd_demo.assurance.max_payload_bytes` | `262144` |
 | `x_fwd_demo.assurance.writer_role` | `x_fwd_demo.assurance_writer` |
+| `x_fwd_demo.assurance.ingress_base_uri` | Authoritative `sys_ws_definition.base_uri` discovered during install |
 | `x_fwd_demo.assurance.worker_base_url` | Empty until the HTTPS worker is configured |
 | `x_fwd_demo.assurance.worker_allowed_base_urls` | Exact configured worker origin |
 | `x_fwd_demo.assurance.worker_auth_profile` | Basic Auth Profile sys_id; never a secret value |
