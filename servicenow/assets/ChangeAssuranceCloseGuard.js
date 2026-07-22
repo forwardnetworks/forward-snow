@@ -4,10 +4,10 @@ ChangeAssuranceCloseGuard.prototype = {
     var failures = [];
     var changeSysId = String(change && change.getUniqueValue ? change.getUniqueValue() : "");
     if (!/^[0-9a-f]{32}$/.test(changeSysId)) failures.push("Change Request identity is invalid");
-    if (this._value(change, "u_forward_assurance_status") !== "completed") {
+    if (this._value(change, "__SCOPE___assurance_status") !== "completed") {
       failures.push("assurance lifecycle is not completed");
     }
-    if (this._value(change, "u_forward_assurance_decision") !== "pass") {
+    if (this._value(change, "__SCOPE___assurance_decision") !== "pass") {
       failures.push("assurance decision is not PASS");
     }
 
@@ -48,7 +48,7 @@ ChangeAssuranceCloseGuard.prototype = {
   },
 
   _assuranceTable: function () {
-    return String(gs.getProperty("x_fwd_demo.tables.change_assurance", "u_forward_change_assurance"));
+    return "__SCOPE___assurance";
   },
 
   _value: function (record, field) {

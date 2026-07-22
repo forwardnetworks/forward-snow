@@ -10,7 +10,6 @@ import re
 SCOPE_PATTERN = re.compile(r"^x_[a-z0-9]+(?:_[a-z0-9]+)*$")
 MAX_SCOPE_LENGTH = 18
 FORBIDDEN_TERMS = frozenset({"demo", "lab", "test", "sandbox", "personal"})
-FORBIDDEN_SCOPES = frozenset({"x_fwd_demo"})
 
 
 def validate_scope(scope: str) -> list[str]:
@@ -19,8 +18,6 @@ def validate_scope(scope: str) -> list[str]:
         errors.append(f"scope must be {MAX_SCOPE_LENGTH} characters or fewer")
     if not SCOPE_PATTERN.fullmatch(scope):
         errors.append("scope must begin with x_ and contain only lowercase letters, digits, and single underscores")
-    if scope in FORBIDDEN_SCOPES:
-        errors.append("scope is a reserved Forward demo identity")
     terms = set(scope.split("_"))
     rejected = sorted(terms & FORBIDDEN_TERMS)
     if rejected:

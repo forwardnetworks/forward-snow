@@ -1,11 +1,10 @@
 var ChangeAssuranceFlowClient = Class.create();
 ChangeAssuranceFlowClient.prototype = {
   initialize: function () {
-    this._baseUrl = String(gs.getProperty("x_fwd_demo.assurance.worker_base_url", "") || "").replace(/\/+$/, "");
-    this._allowedBaseUrls = String(gs.getProperty("x_fwd_demo.assurance.worker_allowed_base_urls", "") || "");
-    this._authProfileSysId = String(gs.getProperty("x_fwd_demo.assurance.worker_auth_profile", "") || "");
-    this._timeoutMs = parseInt(gs.getProperty("x_fwd_demo.assurance.worker_timeout_ms", "30000"), 10);
-    this._maxPayloadBytes = parseInt(gs.getProperty("x_fwd_demo.assurance.worker_max_payload_bytes", "524288"), 10);
+    this._baseUrl = String(gs.getProperty("__SCOPE__.assurance.worker_base_url", "") || "").replace(/\/+$/, "");
+    this._allowedBaseUrls = String(gs.getProperty("__SCOPE__.assurance.worker_allowed_base_urls", "") || "");
+    this._timeoutMs = parseInt(gs.getProperty("__SCOPE__.assurance.worker_timeout_ms", "30000"), 10);
+    this._maxPayloadBytes = parseInt(gs.getProperty("__SCOPE__.assurance.worker_max_payload_bytes", "524288"), 10);
     this._validateConfiguration();
   },
 

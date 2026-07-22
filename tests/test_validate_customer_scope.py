@@ -17,7 +17,7 @@ class CustomerScopeValidationTests(unittest.TestCase):
         self.assertEqual(validate_scope("x_acme_chg_asr"), [])
 
     def test_rejects_demo_and_disposable_scopes(self) -> None:
-        self.assertTrue(validate_scope("x_fwd_demo"))
+        self.assertTrue(validate_scope("x_acme_demo"))
         self.assertTrue(validate_scope("x_acme_lab"))
         self.assertTrue(validate_scope("x_acme_test"))
 

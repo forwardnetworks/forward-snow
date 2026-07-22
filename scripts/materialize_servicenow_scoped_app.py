@@ -16,7 +16,7 @@ from validate_customer_scope import validate_scope
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_ROOT = ROOT / "servicenow" / "scoped-app-template"
 ASSET_ROOT = ROOT / "servicenow" / "assets"
-SDK_VERSION = "4.8.1"
+SDK_VERSION = "4.9.0"
 APP_NAME = "Forward Change Assurance"
 PACKAGE_NAME = "forward-change-assurance"
 
@@ -54,14 +54,7 @@ def render_template(text: str, scope: str) -> str:
 
 def render_service(scope: str) -> str:
     text = (ASSET_ROOT / "ChangeAssuranceService.js").read_text()
-    text = text.replace(
-        'gs.getProperty("x_fwd_demo.assurance.max_payload_bytes", "262144")',
-        f'gs.getProperty("{scope}.assurance.max_payload_bytes", "262144")',
-    )
-    text = text.replace(
-        'return String(gs.getProperty("x_fwd_demo.tables.change_assurance", "u_forward_change_assurance"));',
-        f'return "{scope}_assurance";',
-    )
+    text = text.replace("__SCOPE__", scope)
     for field in ASSURANCE_FIELDS:
         text = text.replace(f'"u_{field}"', f'"{field}"')
     return text
@@ -69,25 +62,14 @@ def render_service(scope: str) -> str:
 
 def render_ingest(scope: str) -> str:
     text = (ASSET_ROOT / "ChangeAssuranceIngest_Resource.js").read_text()
-    text = re.sub(
-        r'var requiredRole = String\(gs\.getProperty\([^;]+;',
-        f'var requiredRole = "{scope}.evidence_writer";',
-        text,
-        count=1,
-    )
-    return text
+    return text.replace("__SCOPE__", scope)
 
 
 def render_close_guard(scope: str) -> str:
     text = (ASSET_ROOT / "ChangeAssuranceCloseGuard.js").read_text()
-    text = text.replace(
-        'return String(gs.getProperty("x_fwd_demo.tables.change_assurance", "u_forward_change_assurance"));',
-        f'return "{scope}_assurance";',
-    )
+    text = text.replace("__SCOPE__", scope)
     for field in ASSURANCE_FIELDS:
         text = text.replace(f'"u_{field}"', f'"{field}"')
-    text = text.replace('"u_forward_assurance_status"', f'"{scope}_assurance_status"')
-    text = text.replace('"u_forward_assurance_decision"', f'"{scope}_assurance_decision"')
     return text
 
 
@@ -157,8 +139,8 @@ def render_flow_client(scope: str) -> str:
     )
     if count != 1:
         raise RuntimeError("could not replace ChangeAssuranceFlowClient configuration block")
-    if "x_fwd_demo" in text or "worker_auth_profile" in text:
-        raise RuntimeError("rendered ChangeAssuranceFlowClient retained demo or auth-profile configuration")
+    if "worker_auth_profile" in text or "__SCOPE__" in text:
+        raise RuntimeError("rendered ChangeAssuranceFlowClient retained unbound configuration")
     return text
 
 
@@ -182,7 +164,13 @@ def write_sdk_sources(output: Path, scope: str) -> None:
     (server / "ChangeAssuranceCloseGuard.server.js").write_text(render_close_guard(scope))
 
 
-def materialize(scope: str, output: Path, *, install_dependencies: bool) -> None:
+def materialize(
+    scope: str,
+    output: Path,
+    *,
+    install_dependencies: bool,
+    auth_alias: str = "",
+) -> None:
     errors = validate_scope(scope)
     if errors:
         raise ValueError("; ".join(errors))
@@ -190,21 +178,24 @@ def materialize(scope: str, output: Path, *, install_dependencies: bool) -> None
         raise ValueError(f"output directory must be absent or empty: {output}")
     output.mkdir(parents=True, exist_ok=True)
 
+    init_command = [
+        "npx",
+        "--yes",
+        f"@servicenow/sdk@{SDK_VERSION}",
+        "init",
+        "--appName",
+        APP_NAME,
+        "--packageName",
+        PACKAGE_NAME,
+        "--scopeName",
+        scope,
+        "--template",
+        "typescript.basic",
+    ]
+    if auth_alias:
+        init_command.extend(["--auth", auth_alias])
     subprocess.run(
-        [
-            "npx",
-            "--yes",
-            f"@servicenow/sdk@{SDK_VERSION}",
-            "init",
-            "--appName",
-            APP_NAME,
-            "--packageName",
-            PACKAGE_NAME,
-            "--scopeName",
-            scope,
-            "--template",
-            "typescript.basic",
-        ],
+        init_command,
         cwd=output,
         check=True,
     )
@@ -220,6 +211,8 @@ def materialize(scope: str, output: Path, *, install_dependencies: bool) -> None
     package["private"] = True
     package["scripts"]["build:raw"] = package["scripts"]["build"]
     package["scripts"]["build"] = "node scripts/verified-build.mjs"
+    package["scripts"]["build:ci"] = "now-sdk build --frozenKeys true --errorOnConflict true"
+    package["scripts"]["deploy"] = "now-sdk install --demoData false --reinstall false"
     package_path.write_text(json.dumps(package, indent=2) + "\n")
     (output / "SCOPED_APP_BUILD.json").write_text(
         json.dumps(
@@ -245,15 +238,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scope", required=True, help="permanent customer-owned ServiceNow scope")
     parser.add_argument("--output", required=True, type=Path, help="new or empty SDK project directory")
+    parser.add_argument("--auth", default="", help="optional SDK auth alias used to validate the scope against an instance")
     parser.add_argument("--install-dependencies", action="store_true")
     args = parser.parse_args()
     try:
-        materialize(args.scope, args.output.expanduser().resolve(), install_dependencies=args.install_dependencies)
+        materialize(
+            args.scope,
+            args.output.expanduser().resolve(),
+            install_dependencies=args.install_dependencies,
+            auth_alias=args.auth,
+        )
     except (ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}")
         return 2
     print(f"materialized {APP_NAME} in {args.output}")
-    print("next: configure a customer-owned SDK auth alias, then run npm run build and npm run deploy -- --auth <alias>")
+    print("next: run npx @servicenow/sdk auth --add <instance-url> --type oauth --alias <alias>, then npm run build and npm run deploy -- --auth <alias>")
     return 0
 
 

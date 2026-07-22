@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 
 const command = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-const result = spawnSync(command, ['now-sdk', 'build'], {
+const result = spawnSync(command, ['now-sdk', 'build', '--errorOnConflict', 'true'], {
   cwd: process.cwd(),
   encoding: 'utf8',
   env: process.env,

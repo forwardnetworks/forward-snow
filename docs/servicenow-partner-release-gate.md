@@ -8,9 +8,8 @@ Forward Change Assurance will be distributed to customers as a certified Service
 not currently have a registered ServiceNow vendor prefix, so the repository must not create or publish a permanent
 application scope yet.
 
-The application design, contracts, tests, and migration tooling remain source controlled and scope neutral until the
-registered prefix and Build Partner vendor instance are available. The existing `x_fwd_demo` namespace is never a
-candidate production identity.
+The application design, contracts, and tests remain source controlled and scope neutral until the registered prefix
+and Build Partner vendor instance are available. A customer-owned scope is the only pre-Store deployment identity.
 
 ## Forward Business Owner Actions
 
@@ -37,7 +36,7 @@ SDK project creation may begin only when all of these are true:
 - the Store app name and support lifecycle are approved.
 
 The exact permanent scope is then written once into the application definition and ServiceNow SDK project. Changing
-it later requires an explicit migration decision; automation must never silently rewrite it.
+it later requires an explicit release decision; automation must never silently rewrite it.
 
 ## Environments And Promotion
 
@@ -62,7 +61,7 @@ Before the first Store submission, retain a release bundle containing:
 - Software Bill of Materials and third-party license review;
 - security architecture, data-flow, credential, logging, retention, and support documentation;
 - one accepted end-to-end Change Request run with ServiceNow ledger/work note/attachment, Forward snapshots and
-  reconciliation, and Dynatrace query-back evidence;
+  reconciliation, and application-evidence readback;
 - customer installation, upgrade, configuration, troubleshooting, and data-removal runbooks.
 
 Partner onboarding can proceed in parallel with repository work, but Store publication cannot proceed until this

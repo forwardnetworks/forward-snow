@@ -18,7 +18,7 @@ export const operatorRole = Role({
 
 export const adminRole = Role({
     name: '__SCOPE__.admin',
-    description: 'Administer Forward Change Assurance policy, aliases, and migrations',
+    description: 'Administer Forward Change Assurance policy and aliases',
     scopedAdmin: true,
     containsRoles: [auditorRole, evidenceWriterRole, operatorRole],
 })

@@ -20,12 +20,6 @@ ScriptInclude({
     script: Now.include('../server/ChangeAssuranceFlowClient.server.js'),
 })
 ScriptInclude({
-    $id: Now.ID['change_assurance_migration'], name: 'ChangeAssuranceMigration',
-    apiName: '__SCOPE__.ChangeAssuranceMigration', active: true, clientCallable: false,
-    accessibleFrom: 'package_private', protectionPolicy: 'read',
-    script: Now.include('../server/ChangeAssuranceMigration.server.js'),
-})
-ScriptInclude({
     $id: Now.ID['change_assurance_close_guard'], name: 'ChangeAssuranceCloseGuard',
     apiName: '__SCOPE__.ChangeAssuranceCloseGuard', active: true, clientCallable: false,
     accessibleFrom: 'package_private', protectionPolicy: 'read',

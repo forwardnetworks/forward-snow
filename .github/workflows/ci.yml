@@ -8,18 +8,52 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: forward-snow-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 24.18.0
+          node-version: 20.18.1
           cache: npm
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: npm ci
-      - run: npm run validate
+          python-version: '3.12'
+
+      - name: Validate source kit
+        run: |
+          npm ci --ignore-scripts
+          npm run validate
+          npm audit --omit=dev --audit-level=high
+
+      - name: Build generated scoped application
+        run: |
+          workdir="$RUNNER_TEMP/forward-snow-generated"
+          mkdir -p "$workdir"
+          python3 scripts/materialize_servicenow_scoped_app.py \
+            --scope x_acme_fca \
+            --output "$workdir/app" \
+            --install-dependencies
+          cd "$workdir/app"
+          npm run build
+          npm run build:ci
+
+      - name: Retain generated release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoped-app-build
+          path: |
+            ${{ runner.temp }}/forward-snow-generated/app/now.config.json
+            ${{ runner.temp }}/forward-snow-generated/app/SCOPED_APP_BUILD.json
+            ${{ runner.temp }}/forward-snow-generated/app/package-lock.json
+            ${{ runner.temp }}/forward-snow-generated/app/dist/app
+          if-no-files-found: error
+          retention-days: 14

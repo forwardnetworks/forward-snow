@@ -1,6 +1,6 @@
 # Customer-Managed Scoped Application
 
-Status: supported pre-Store distribution path under construction
+Status: production deployment path
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Application Repository entitlement.
 Forward owns:
 
 - the versioned source template, contract schemas, build instructions, tests, release notes, and checksums;
-- the behavior of the native actions, subflows, ledger, evidence API, migration utility, and readiness diagnostics;
+- the behavior of the native actions, subflows, ledger, evidence API, and readiness diagnostics;
 - compatibility claims for explicitly tested ServiceNow releases;
 - support for an unmodified release kit installed according to this guide.
 
@@ -58,7 +58,7 @@ upgrades.
 5. Build from a clean checkout and install only in the customer development instance.
 6. Bind the packaged assurance-worker connection and credential aliases. Do not modify source or properties with
    credential values.
-7. Run ATF, Instance Scan, readiness diagnostics, negative-security tests, and the full pre-change/post-change demo.
+7. Run ATF, Instance Scan, readiness diagnostics, and negative-security tests.
 8. Review the application files, ACLs, cross-scope privileges, external HTTPS origins, and retained-data policy.
 9. Publish the approved version to the customer's Application Repository and restrict instance entitlements as
    required.
@@ -79,20 +79,3 @@ Set lifecycle management for the same application.
 - Local changes are a customer fork. Forward tests the unmodified release kit; fork reconciliation is an explicit
   professional-services or customer engineering activity.
 - Reinstall flags that can remove instance metadata are prohibited from routine deployment.
-
-## Transition To The Future Store Application
-
-The Forward Store application will use a different Forward-owned scope and is therefore a separate application, not
-an in-place upgrade of customer-owned scopes.
-
-The supported transition is:
-
-1. stop new runs in the customer-owned app and leave its audit records readable;
-2. install the certified Store application in non-production;
-3. bind new Store-app aliases to the same customer-owned connections and credentials;
-4. run an idempotent, checksum-verified migration of allowed ledger, attachment, and Change Request correlation data;
-5. prove record counts, hashes, ACLs, flow behavior, and a new end-to-end acceptance run;
-6. promote the Store application and retire the customer-owned writer paths with administrator approval;
-7. retain or remove the legacy app and data according to customer policy—never automatically.
-
-No credential value, authentication record, connection sys_id, or customer URL is exported as migration data.

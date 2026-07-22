@@ -15,7 +15,6 @@ export const __SCOPE___assurance = Table({
     accessibleFrom: 'package_private',
     schema: {
         change_request: ReferenceColumn({ label: 'Change Request', referenceTable: 'change_request', mandatory: true }),
-        legacy_source_sys_id: StringColumn({ label: 'Legacy Source Sys ID', maxLength: 32, unique: true }),
         run_id: StringColumn({ label: 'Assurance Run ID', maxLength: 255 }),
         idempotency_key: StringColumn({ label: 'Idempotency Key', maxLength: 128, mandatory: true, unique: true }),
         deployment_id: StringColumn({ label: 'Deployment ID', maxLength: 255, mandatory: true }),
@@ -73,7 +72,6 @@ export const __SCOPE___validation = Table({
     accessibleFrom: 'package_private',
     schema: {
         change_request: ReferenceColumn({ label: 'Change Request', referenceTable: 'change_request', mandatory: true }),
-        legacy_source_sys_id: StringColumn({ label: 'Legacy Source Sys ID', maxLength: 32, unique: true }),
         source_ip: StringColumn({ label: 'Source IP', maxLength: 45, mandatory: true }),
         destination_ip: StringColumn({ label: 'Destination IP', maxLength: 45, mandatory: true }),
         protocol: StringColumn({ label: 'Protocol', default: 'TCP', choices: { TCP: 'TCP', UDP: 'UDP' } }),

@@ -36,7 +36,7 @@
   "roles": [
     {
       "logicalName": "admin",
-      "purpose": "Configure aliases, policy, retention, and migrations"
+      "purpose": "Configure aliases and policy"
     },
     {
       "logicalName": "operator",
@@ -182,11 +182,6 @@
       "purpose": "Bounded worker calls through packaged connection and credential aliases"
     },
     {
-      "logicalName": "ChangeAssuranceMigration",
-      "clientCallable": false,
-      "purpose": "Explicit idempotent legacy evidence migration without credential copy"
-    },
-    {
       "logicalName": "ChangeAssuranceCloseGuard",
       "clientCallable": false,
       "purpose": "Evaluate authoritative ServiceNow, Forward, and Dynatrace evidence before closeout"
@@ -261,12 +256,5 @@
   "automatedTests": [
     "install_and_default_acl",
     "worker_alias_readiness"
-  ],
-  "storeTransition": {
-    "inPlaceUpgrade": false,
-    "requiresExplicitMigration": true,
-    "copyCredentialValues": false,
-    "freezeLegacyWritersBeforeMigration": true,
-    "administratorRetirementApprovalRequired": true
-  }
+  ]
 }

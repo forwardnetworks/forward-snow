@@ -1,6 +1,6 @@
 (function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
   try {
-    var requiredRole = String(gs.getProperty("x_fwd_demo.assurance.writer_role", "x_fwd_demo.assurance_writer"));
+    var requiredRole = "__SCOPE__.evidence_writer";
     if (!gs.hasRole("admin") && !gs.hasRole(requiredRole)) {
       response.setStatus(403);
       return { status: "error", message: "change assurance writer role is required" };

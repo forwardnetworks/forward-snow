@@ -9,7 +9,7 @@ ChangeAssuranceService.prototype = {
     try {
       parsed = this._contract.parse(
         payload,
-        gs.getProperty("x_fwd_demo.assurance.max_payload_bytes", "262144")
+        gs.getProperty("__SCOPE__.assurance.max_payload_bytes", "262144")
       );
     } catch (e) {
       throw this._withStatus(e, 400);
@@ -46,7 +46,7 @@ ChangeAssuranceService.prototype = {
   },
 
   _assuranceTable: function () {
-    return String(gs.getProperty("x_fwd_demo.tables.change_assurance", "u_forward_change_assurance"));
+    return "__SCOPE___assurance";
   },
 
   _findByIdempotencyKey: function (idempotencyKey) {
@@ -74,7 +74,7 @@ ChangeAssuranceService.prototype = {
     this._set(rec, "u_lifecycle_state", "evidence_received");
     this._set(rec, "u_decision", value.decision);
     this._set(rec, "u_reason_codes", value.reasonCodes.join(","));
-    this._set(rec, "u_forward_network_id", value.networkId);
+    this._set(rec, "forward_network_id", value.networkId);
     this._set(rec, "u_before_snapshot_id", value.beforeSnapshotId);
     this._set(rec, "u_after_snapshot_id", value.afterSnapshotId);
     this._set(rec, "u_reconciliation_run_id", value.reconciliationRunId);

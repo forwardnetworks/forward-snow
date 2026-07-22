@@ -4,7 +4,7 @@ Test(
     {
         $id: Now.ID['install_metadata_atf'],
         name: 'Forward Change Assurance - install metadata',
-        description: 'Verify packaged tables, roles, script includes, and the absence of legacy credential configuration',
+        description: 'Verify packaged tables, roles, script includes, and strict credential configuration',
         active: true,
         failOnServerError: true,
     },
@@ -25,7 +25,7 @@ Test(
         role.query();
         expect(role.next()).toBe(true);
       });
-      ['ChangeAssuranceContract', 'ChangeAssuranceService', 'ChangeAssuranceFlowClient', 'ChangeAssuranceMigration', 'ChangeAssuranceCloseGuard'].forEach(function (name) {
+      ['ChangeAssuranceContract', 'ChangeAssuranceService', 'ChangeAssuranceFlowClient', 'ChangeAssuranceCloseGuard'].forEach(function (name) {
         var include = new GlideRecord('sys_script_include');
         include.addQuery('name', name);
         include.addQuery('sys_scope.scope', '__SCOPE__');
@@ -42,7 +42,7 @@ Test(
       closeGuard.query();
       expect(closeGuard.next()).toBe(true);
     });
-    it('does not install legacy credential properties', function () {
+    it('does not install credential values or unscoped properties', function () {
       var property = new GlideRecord('sys_properties');
       property.addQuery('name', 'IN', [
         '__SCOPE__.assurance.worker_base_url', '__SCOPE__.assurance.worker_allowed_base_urls',
