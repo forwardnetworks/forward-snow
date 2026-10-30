@@ -25,7 +25,7 @@ Test(
         role.query();
         expect(role.next()).toBe(true);
       });
-      ['ChangeAssuranceContract', 'ChangeAssuranceService', 'ChangeAssuranceFlowClient', 'ChangeAssuranceCloseGuard'].forEach(function (name) {
+      ['ChangeAssuranceContract', 'ChangeAssuranceService', 'ChangeAssuranceFlowClient', 'ChangeAssuranceCloseGuard', 'ForwardApiClient', 'ForwardPathCheck'].forEach(function (name) {
         var include = new GlideRecord('sys_script_include');
         include.addQuery('name', name);
         include.addQuery('sys_scope.scope', '__SCOPE__');

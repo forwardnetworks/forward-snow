@@ -48,6 +48,22 @@ class ScopedAppMaterializerTests(unittest.TestCase):
         self.assertNotIn("worker_auth_profile", rendered)
         self.assertNotIn("demo", rendered.lower())
 
+    def test_forward_client_is_scoped_and_alias_bound(self) -> None:
+        rendered = materializer.render_forward_client("x_acme_fca")
+        self.assertIn('alias.addQuery("sys_scope.scope", "x_acme_fca")', rendered)
+        self.assertIn('gs.getProperty("x_acme_fca.forward.timeout_ms"', rendered)
+        self.assertIn("sn_cc.ConnectionInfoProvider", rendered)
+        self.assertNotIn("__SCOPE__", rendered)
+        self.assertNotIn("demo", rendered.lower())
+        source = (ROOT / "scripts/materialize_servicenow_scoped_app.py").read_text()
+        self.assertIn('"ForwardApiClient.server.js"', source)
+
+    def test_path_check_targets_the_scoped_validation_table(self) -> None:
+        rendered = materializer.render_path_check("x_acme_fca")
+        self.assertIn('new GlideRecordSecure("x_acme_fca_validation")', rendered)
+        self.assertNotIn("__SCOPE__", rendered)
+        self.assertNotIn("demo", rendered.lower())
+
     def test_dependency_install_includes_sdk_dev_dependencies(self) -> None:
         source = (ROOT / "scripts/materialize_servicenow_scoped_app.py").read_text()
         self.assertIn('["npm", "install", "--include=dev"]', source)
@@ -55,7 +71,7 @@ class ScopedAppMaterializerTests(unittest.TestCase):
 
     def test_uses_current_local_sdk_and_install_workflow(self) -> None:
         source = (ROOT / "scripts/materialize_servicenow_scoped_app.py").read_text()
-        self.assertIn('SDK_VERSION = "4.9.0"', source)
+        self.assertIn('SDK_VERSION = "4.14.0"', source)
         self.assertIn("npx @servicenow/sdk auth --add", source)
         self.assertIn("npm run build and npm run deploy", source)
         self.assertIn('package["scripts"]["build:ci"] = "now-sdk build --frozenKeys true --errorOnConflict true"', source)

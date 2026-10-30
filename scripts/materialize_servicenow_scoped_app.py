@@ -16,7 +16,7 @@ from validate_customer_scope import validate_scope
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_ROOT = ROOT / "servicenow" / "scoped-app-template"
 ASSET_ROOT = ROOT / "servicenow" / "assets"
-SDK_VERSION = "4.9.0"
+SDK_VERSION = "4.14.0"
 APP_NAME = "Forward Change Assurance"
 PACKAGE_NAME = "forward-change-assurance"
 
@@ -71,6 +71,16 @@ def render_close_guard(scope: str) -> str:
     for field in ASSURANCE_FIELDS:
         text = text.replace(f'"u_{field}"', f'"{field}"')
     return text
+
+
+def render_forward_client(scope: str) -> str:
+    text = (ASSET_ROOT / "ForwardApiClient.js").read_text()
+    return text.replace("__SCOPE__", scope)
+
+
+def render_path_check(scope: str) -> str:
+    text = (ASSET_ROOT / "ForwardPathCheck.js").read_text()
+    return text.replace("__SCOPE__", scope)
 
 
 def render_flow_client(scope: str) -> str:
@@ -162,6 +172,8 @@ def write_sdk_sources(output: Path, scope: str) -> None:
     (server / "ChangeAssuranceFlowClient.server.js").write_text(render_flow_client(scope))
     (server / "ChangeAssuranceIngest.server.js").write_text(render_ingest(scope))
     (server / "ChangeAssuranceCloseGuard.server.js").write_text(render_close_guard(scope))
+    (server / "ForwardApiClient.server.js").write_text(render_forward_client(scope))
+    (server / "ForwardPathCheck.server.js").write_text(render_path_check(scope))
 
 
 def materialize(

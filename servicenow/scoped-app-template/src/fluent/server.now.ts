@@ -20,6 +20,18 @@ ScriptInclude({
     script: Now.include('../server/ChangeAssuranceFlowClient.server.js'),
 })
 ScriptInclude({
+    $id: Now.ID['forward_api_client'], name: 'ForwardApiClient',
+    apiName: '__SCOPE__.ForwardApiClient', active: true, clientCallable: false,
+    accessibleFrom: 'package_private', protectionPolicy: 'read',
+    script: Now.include('../server/ForwardApiClient.server.js'),
+})
+ScriptInclude({
+    $id: Now.ID['forward_path_check'], name: 'ForwardPathCheck',
+    apiName: '__SCOPE__.ForwardPathCheck', active: true, clientCallable: false,
+    accessibleFrom: 'package_private', protectionPolicy: 'read',
+    script: Now.include('../server/ForwardPathCheck.server.js'),
+})
+ScriptInclude({
     $id: Now.ID['change_assurance_close_guard'], name: 'ChangeAssuranceCloseGuard',
     apiName: '__SCOPE__.ChangeAssuranceCloseGuard', active: true, clientCallable: false,
     accessibleFrom: 'package_private', protectionPolicy: 'read',

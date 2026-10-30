@@ -176,3 +176,49 @@ export const completeChangeAssurance = Action(
         })
     },
 )
+
+export const checkForwardPath = Action(
+    {
+        $id: Now.ID['check_forward_path_action'],
+        name: 'Check Forward Path',
+        internalName: 'check_forward_path',
+        description: 'Run a Forward path search for a Forward Path Validation record and record the verdict on it. Run the calling flow as the user, not as System: the record ACLs apply to the caller.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: {
+            validation_sys_id: StringColumn({ label: 'Path validation sys_id', mandatory: true, maxLength: 32 }),
+            pinned_snapshot_id: StringColumn({ label: 'Pin to Forward Snapshot ID (optional)', maxLength: 64 }),
+        },
+        outputs: {
+            validation_status: StringColumn({ label: 'Validation status', maxLength: 16 }),
+            observed_outcome: StringColumn({ label: 'Observed outcome', maxLength: 16 }),
+            snapshot_id: StringColumn({ label: 'Forward Snapshot ID', maxLength: 255 }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['check_forward_path_script'], label: 'Run Forward path search' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/check-forward-path.server.js'),
+                inputVariables: {
+                    validation_sys_id: { label: 'Path validation sys_id', value: wfa.dataPill(params.inputs.validation_sys_id, 'string') },
+                    pinned_snapshot_id: { label: 'Pinned snapshot ID', value: wfa.dataPill(params.inputs.pinned_snapshot_id, 'string') },
+                },
+                outputVariables: {
+                    validation_status: StringColumn({ label: 'Validation status', maxLength: 16 }),
+                    observed_outcome: StringColumn({ label: 'Observed outcome', maxLength: 16 }),
+                    snapshot_id: StringColumn({ label: 'Forward Snapshot ID', maxLength: 255 }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            validation_status: wfa.dataPill(step.validation_status, 'string'),
+            observed_outcome: wfa.dataPill(step.observed_outcome, 'string'),
+            snapshot_id: wfa.dataPill(step.snapshot_id, 'string'),
+        })
+    },
+)
