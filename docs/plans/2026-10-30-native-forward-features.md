@@ -102,5 +102,6 @@ Phases, each shippable on its own: (1) client and path search, (2) Maps, (3) Pre
 
 ## Rollback
 
-Each feature is additive: new tables, a script include, and subflows behind a setting that defaults to off. Removing
-the feature means deactivating the setting; uninstalling the app removes the rest.
+Each feature is additive: new tables, a script include, and subflows. Maps stays inert until `forward.network_id` is set
+and can be switched off with `forward.maps_enabled`; Predict will ship behind an opt-in setting that defaults to off.
+Uninstalling the app removes the rest.

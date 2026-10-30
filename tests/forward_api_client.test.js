@@ -245,3 +245,21 @@ test("a zero status is a transport failure", () => {
   reply(0, "");
   assert.throws(() => new ForwardApiClient().listNetworks(), (error) => error.kind === "unreachable");
 });
+
+test("lists Network Maps as id, name and pinned only, and flags a list past the cap", () => {
+  reset();
+  reply(200, { maps: [{ id: "0", name: "Branch A", pinned: true, createdBy: "someone@example.com" }, { id: "1", name: "Branch B" }] });
+  const result = new ForwardApiClient().listMaps("235937");
+  assert.equal(world.requests[0].endpoint, "https://fwd.example.com/api/networks/235937/maps");
+  assert.deepEqual(result, { maps: [{ id: "0", name: "Branch A", pinned: true }, { id: "1", name: "Branch B", pinned: false }], truncated: false });
+
+  reset();
+  reply(200, { maps: Array.from({ length: 1001 }, (_, i) => ({ id: String(i), name: "m" })) });
+  const big = new ForwardApiClient().listMaps("235937");
+  assert.equal(big.maps.length, 1000);
+  assert.equal(big.truncated, true);
+
+  reset();
+  reply(200, []);
+  assert.throws(() => new ForwardApiClient().listMaps("1"), (error) => error.kind === "invalid_response");
+});

@@ -1,5 +1,5 @@
-import { Acl, RestApi, ScriptInclude } from '@servicenow/sdk/core'
-import { evidenceWriterRole } from './roles.now'
+import { Acl, RestApi, ScriptInclude, UiAction } from '@servicenow/sdk/core'
+import { adminRole, auditorRole, evidenceWriterRole, operatorRole } from './roles.now'
 
 ScriptInclude({
     $id: Now.ID['change_assurance_contract'], name: 'ChangeAssuranceContract',
@@ -24,6 +24,12 @@ ScriptInclude({
     apiName: '__SCOPE__.ForwardApiClient', active: true, clientCallable: false,
     accessibleFrom: 'package_private', protectionPolicy: 'read',
     script: Now.include('../server/ForwardApiClient.server.js'),
+})
+ScriptInclude({
+    $id: Now.ID['forward_maps_lookup'], name: 'ForwardMapsLookup',
+    apiName: '__SCOPE__.ForwardMapsLookup', active: true, clientCallable: false,
+    accessibleFrom: 'package_private', protectionPolicy: 'read',
+    script: Now.include('../server/ForwardMapsLookup.server.js'),
 })
 ScriptInclude({
     $id: Now.ID['forward_path_check'], name: 'ForwardPathCheck',
@@ -61,4 +67,13 @@ RestApi({
         shortDescription: 'Validate and publish checksum-bound Forward and Dynatrace evidence',
         protectionPolicy: 'read',
     }],
+})
+
+UiAction({
+    $id: Now.ID['show_forward_maps_ui_action'], table: 'change_request', name: 'Show Forward Maps',
+    actionName: 'show_forward_maps', active: true, form: { showButton: true, style: 'unstyled' },
+    showInsert: false, showUpdate: true, hint: 'List the Forward Network Maps that match this change',
+    roles: [adminRole, auditorRole, operatorRole],
+    condition: "gs.getProperty('__SCOPE__.forward.maps_enabled', 'true') == 'true'",
+    script: Now.include('../server/ForwardMapsUiAction.server.js'),
 })

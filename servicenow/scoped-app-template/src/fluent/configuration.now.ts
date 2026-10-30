@@ -45,3 +45,11 @@ Property({
     $id: Now.ID['forward_max_path_results'], name: '__SCOPE__.forward.max_path_results', type: 'integer', value: 10,
     description: 'Maximum Forward paths returned and summarized per path search', roles: { read: [adminRole], write: [adminRole] },
 })
+Property({
+    $id: Now.ID['forward_network_id'], name: '__SCOPE__.forward.network_id', type: 'string', value: '',
+    description: 'Forward network ID that Network Maps are read from', roles: { read: [adminRole], write: [adminRole] },
+})
+Property({
+    $id: Now.ID['forward_maps_enabled'], name: '__SCOPE__.forward.maps_enabled', type: 'boolean', value: true,
+    description: 'Show Forward Network Maps that match a Change Request; turn off to stop reading maps', roles: { read: [adminRole], write: [adminRole] },
+})

@@ -83,6 +83,11 @@ def render_path_check(scope: str) -> str:
     return text.replace("__SCOPE__", scope)
 
 
+def render_maps_lookup(scope: str) -> str:
+    text = (ASSET_ROOT / "ForwardMapsLookup.js").read_text()
+    return text.replace("__SCOPE__", scope)
+
+
 def render_flow_client(scope: str) -> str:
     text = (ASSET_ROOT / "ChangeAssuranceFlowClient.js").read_text()
     initialize = f'''initialize: function () {{
@@ -174,6 +179,21 @@ def write_sdk_sources(output: Path, scope: str) -> None:
     (server / "ChangeAssuranceCloseGuard.server.js").write_text(render_close_guard(scope))
     (server / "ForwardApiClient.server.js").write_text(render_forward_client(scope))
     (server / "ForwardPathCheck.server.js").write_text(render_path_check(scope))
+    (server / "ForwardMapsLookup.server.js").write_text(render_maps_lookup(scope))
+
+
+def apply_scope_id(output: Path, scope_id: str) -> None:
+    """Recovery only: give a regenerated project the scope ID of an installed application.
+
+    Record IDs still differ from the installed copy; see docs/customer-managed-scoped-app.md."""
+    if not re.fullmatch(r"[0-9a-f]{32}", scope_id):
+        raise ValueError("scope ID must be the 32-character lowercase hex sys_id of the installed application")
+    config_path = output / "now.config.json"
+    config = json.loads(config_path.read_text())
+    if "scopeId" not in config:
+        raise RuntimeError("now.config.json has no scopeId; the SDK init output changed")
+    config["scopeId"] = scope_id
+    config_path.write_text(json.dumps(config, indent=4) + "\n")
 
 
 def materialize(
@@ -182,10 +202,13 @@ def materialize(
     *,
     install_dependencies: bool,
     auth_alias: str = "",
+    scope_id: str = "",
 ) -> None:
     errors = validate_scope(scope)
     if errors:
         raise ValueError("; ".join(errors))
+    if scope_id and not re.fullmatch(r"[0-9a-f]{32}", scope_id):
+        raise ValueError("scope ID must be the 32-character lowercase hex sys_id of the installed application")
     if output.exists() and any(output.iterdir()):
         raise ValueError(f"output directory must be absent or empty: {output}")
     output.mkdir(parents=True, exist_ok=True)
@@ -211,6 +234,9 @@ def materialize(
         cwd=output,
         check=True,
     )
+
+    if scope_id:
+        apply_scope_id(output, scope_id)
 
     for generated_example in (output / "src" / "fluent" / "example.now.ts", output / "src" / "server" / "script.ts"):
         generated_example.unlink(missing_ok=True)
@@ -251,6 +277,11 @@ def main() -> int:
     parser.add_argument("--scope", required=True, help="permanent customer-owned ServiceNow scope")
     parser.add_argument("--output", required=True, type=Path, help="new or empty SDK project directory")
     parser.add_argument("--auth", default="", help="optional SDK auth alias used to validate the scope against an instance")
+    parser.add_argument(
+        "--scope-id",
+        default="",
+        help="recovery only: application sys_id of an installed copy whose original project is lost (record IDs still differ; see docs)",
+    )
     parser.add_argument("--install-dependencies", action="store_true")
     args = parser.parse_args()
     try:
@@ -259,6 +290,7 @@ def main() -> int:
             args.output.expanduser().resolve(),
             install_dependencies=args.install_dependencies,
             auth_alias=args.auth,
+            scope_id=args.scope_id,
         )
     except (ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}")

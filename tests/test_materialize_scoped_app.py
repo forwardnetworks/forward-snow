@@ -64,6 +64,39 @@ class ScopedAppMaterializerTests(unittest.TestCase):
         self.assertNotIn("__SCOPE__", rendered)
         self.assertNotIn("demo", rendered.lower())
 
+    def test_maps_lookup_is_scoped_and_read_only(self) -> None:
+        rendered = materializer.render_maps_lookup("x_acme_fca")
+        self.assertIn('gs.getProperty("x_acme_fca.forward.maps_enabled"', rendered)
+        self.assertIn('new GlideRecordSecure("change_request")', rendered)
+        self.assertNotIn("__SCOPE__", rendered)
+        self.assertNotIn(".update(", rendered)
+        self.assertNotIn("demo", rendered.lower())
+
+    def test_scope_id_is_written_to_the_project_config(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            (output / "now.config.json").write_text(
+                json.dumps({"scope": "x_acme_fca", "scopeId": "a" * 32, "name": "Forward Change Assurance"})
+            )
+            materializer.apply_scope_id(output, "efbe4ce9cd7949b18735151bd3916418")
+            config = json.loads((output / "now.config.json").read_text())
+            self.assertEqual(config["scopeId"], "efbe4ce9cd7949b18735151bd3916418")
+            self.assertEqual(config["scope"], "x_acme_fca")
+            for bad in ("", "EFBE4CE9CD7949B18735151BD3916418", "efbe", "g" * 32):
+                with self.assertRaises(ValueError):
+                    materializer.apply_scope_id(output, bad)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                materializer.materialize("x_acme_fca", Path(directory) / "app", install_dependencies=False, scope_id="not-an-id")
+            self.assertFalse((Path(directory) / "app").exists())
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "now.config.json").write_text(json.dumps({"scope": "x_acme_fca"}))
+            with self.assertRaises(RuntimeError):
+                materializer.apply_scope_id(Path(directory), "efbe4ce9cd7949b18735151bd3916418")
+
     def test_dependency_install_includes_sdk_dev_dependencies(self) -> None:
         source = (ROOT / "scripts/materialize_servicenow_scoped_app.py").read_text()
         self.assertIn('["npm", "install", "--include=dev"]', source)

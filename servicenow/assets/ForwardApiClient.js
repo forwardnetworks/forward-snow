@@ -24,6 +24,19 @@ ForwardApiClient.prototype = {
     return networks;
   },
 
+  // Saved Network Maps (an unpublished Forward route). Needs the VIEW_NETWORK_MAPS operation on the network.
+  listMaps: function (networkId) {
+    var body = this._get("/networks/" + this._identifier(networkId, "networkId") + "/maps", null);
+    var items = body && Array.isArray(body.maps) ? body.maps : null;
+    if (!items) throw this._failure("invalid_response", 200, "Forward map list was not an array");
+    var maps = [];
+    for (var i = 0; i < items.length && i < 1000; i++) {
+      var item = items[i] || {};
+      maps.push({ id: String(item.id || ""), name: String(item.name || ""), pinned: item.pinned === true });
+    }
+    return { maps: maps, truncated: items.length > 1000 };
+  },
+
   listSnapshots: function (networkId) {
     var query = { state: "PROCESSED", includeArchived: "false", limit: String(this._maxSnapshots) };
     var body = this._get("/networks/" + this._identifier(networkId, "networkId") + "/snapshots", query);

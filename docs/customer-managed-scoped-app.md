@@ -72,7 +72,13 @@ Set lifecycle management for the same application.
 
 ## Upgrades And Customer Modifications
 
-- A customer's scope and scope ID never change during upgrades.
+- A customer's scope and scope ID never change during upgrades. Upgrade from the original project directory and keep it,
+  with `now.config.json` and `src/fluent/generated/keys.ts`, in the private repository: the keys fix the record IDs
+  the instance already holds. Generate a new project only for a first install.
+- Recovery only: if the original project and keys are lost, `--scope-id <application sys_id>` regenerates a project
+  that the instance accepts for the same application (without it the scope is refused as already taken). Its record
+  IDs are new, so deploying it over the installed copy creates a second copy of every script include and can leave
+  flows failing to activate. Remove the installed application from its rollback record first, then deploy once.
 - Forward release versions are applied to the customer's private source branch and reviewed as ordinary source
   changes before build.
 - The upgrade must preserve customer-owned aliases, bindings, retained ledger records, and local policy values.

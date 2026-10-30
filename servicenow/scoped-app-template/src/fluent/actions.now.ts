@@ -1,5 +1,5 @@
 import { Action, actionStep, wfa } from '@servicenow/sdk/automation'
-import { BooleanColumn, StringColumn } from '@servicenow/sdk/core'
+import { BooleanColumn, IntegerColumn, StringColumn } from '@servicenow/sdk/core'
 
 export const startChangeAssurance = Action(
     {
@@ -219,6 +219,48 @@ export const checkForwardPath = Action(
             validation_status: wfa.dataPill(step.validation_status, 'string'),
             observed_outcome: wfa.dataPill(step.observed_outcome, 'string'),
             snapshot_id: wfa.dataPill(step.snapshot_id, 'string'),
+        })
+    },
+)
+
+export const listForwardMaps = Action(
+    {
+        $id: Now.ID['list_forward_maps_action'],
+        name: 'List Forward Maps',
+        internalName: 'list_forward_maps',
+        description: 'List the Forward Network Maps that match a Change Request. Read only; a Forward refusal is returned as a note. Map names come from Forward: escape maps_json before showing it. Run the calling flow as the user, not as System.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: { change_sys_id: StringColumn({ label: 'Change Request sys_id', mandatory: true, maxLength: 32 }) },
+        outputs: {
+            maps_json: StringColumn({ label: 'Matching maps JSON', maxLength: 65535 }),
+            match_count: IntegerColumn({ label: 'Match count' }),
+            note: StringColumn({ label: 'Note', maxLength: 1000 }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['list_forward_maps_script'], label: 'Read matching Forward maps' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/list-forward-maps.server.js'),
+                inputVariables: {
+                    change_sys_id: { label: 'Change Request sys_id', value: wfa.dataPill(params.inputs.change_sys_id, 'string') },
+                },
+                outputVariables: {
+                    maps_json: StringColumn({ label: 'Matching maps JSON', maxLength: 65535 }),
+                    match_count: IntegerColumn({ label: 'Match count' }),
+                    note: StringColumn({ label: 'Note', maxLength: 1000 }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            maps_json: wfa.dataPill(step.maps_json, 'string'),
+            match_count: wfa.dataPill(step.match_count, 'integer'),
+            note: wfa.dataPill(step.note, 'string'),
         })
     },
 )

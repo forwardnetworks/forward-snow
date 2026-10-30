@@ -187,6 +187,18 @@
       "default": 10,
       "minimum": 1,
       "maximum": 100
+    },
+    {
+      "logicalName": "forward.network_id",
+      "type": "string",
+      "secret": false,
+      "default": ""
+    },
+    {
+      "logicalName": "forward.maps_enabled",
+      "type": "boolean",
+      "secret": false,
+      "default": true
     }
   ],
   "scriptIncludes": [
@@ -219,6 +231,11 @@
       "logicalName": "ForwardPathCheck",
       "clientCallable": false,
       "purpose": "Runs a Forward path search for a validation record and records a pass, fail or error verdict with the snapshot used"
+    },
+    {
+      "logicalName": "ForwardMapsLookup",
+      "clientCallable": false,
+      "purpose": "Finds Forward Network Maps whose name matches a Change Request's configuration item, location or service; read only"
     }
   ],
   "businessRules": [
@@ -255,6 +272,10 @@
     {
       "logicalName": "check_forward_path",
       "operation": "path_check"
+    },
+    {
+      "logicalName": "list_forward_maps",
+      "operation": "maps"
     }
   ],
   "subflows": [
