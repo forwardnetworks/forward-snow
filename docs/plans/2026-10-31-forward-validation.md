@@ -109,3 +109,13 @@ A plan review approved the native-first decision and required these changes, all
   for one row and use Forward's total.
 - **Closed changes.** Bind and run refuse a closed or cancelled change.
 - Not done: other engines (intent checks, Predict), and wiring a score into the assurance close guard.
+
+## Known limits
+
+- A validation run lists the network's processed snapshots to check that the one used belongs to the network, so a network
+  with 500 or more processed, unarchived snapshots cannot run validation (the list is refused rather than trimmed).
+- The capability probe treats a 404 from the change-set list as "not offered", which can also mean a wrong network id.
+- Query results over the response-size limit (`forward.max_response_bytes`) are an `error` for that criterion, never a pass.
+- The Refresh Forward Prediction button has no opt-in condition on purpose, so a run can still be finished after the
+  feature is switched off.
+- Not verified: how Forward words a real query error, the Predict buttons in a browser, and licence-refusal wording.
