@@ -111,6 +111,47 @@
       "uniqueKeys": [
         "claim"
       ]
+    },
+    {
+      "logicalName": "criterion",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "operator"
+      ],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": []
+    },
+    {
+      "logicalName": "validation_run",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": [
+        "claim"
+      ]
+    },
+    {
+      "logicalName": "validation_result",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": []
     }
   ],
   "changeRequestCorrelation": [
@@ -146,6 +187,32 @@
     },
     {
       "logicalName": "predict_revision",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "logicalName": "validation_status",
+      "type": "choice",
+      "values": [
+        "not_run",
+        "pass",
+        "fail",
+        "error",
+        "incomplete",
+        "stale"
+      ]
+    },
+    {
+      "logicalName": "validation_score",
+      "type": "integer"
+    },
+    {
+      "logicalName": "validation_snapshot_id",
+      "type": "string",
+      "maximumLength": 64
+    },
+    {
+      "logicalName": "criteria_revision",
       "type": "integer",
       "default": 0
     }
@@ -252,6 +319,14 @@
       "default": 10,
       "minimum": 1,
       "maximum": 50
+    },
+    {
+      "logicalName": "forward.validation_max_criteria",
+      "type": "integer",
+      "secret": false,
+      "default": 20,
+      "minimum": 1,
+      "maximum": 100
     }
   ],
   "scriptIncludes": [
@@ -294,6 +369,11 @@
       "logicalName": "ForwardPredict",
       "clientCallable": false,
       "purpose": "Advisory Forward Predict lifecycle: validate, stage, commit and predict a proposal in a dedicated network, then refresh and clean up; writes to Forward only after opt-in and confirmation"
+    },
+    {
+      "logicalName": "ForwardValidation",
+      "clientCallable": false,
+      "purpose": "Binds validation criteria to saved Forward query versions and runs them against a snapshot, recording counts, verdicts and a score; read only, no row content stored"
     }
   ],
   "businessRules": [
@@ -320,6 +400,18 @@
       "table": "change_request",
       "when": "before_delete",
       "purpose": "Delete the Forward change set of a deleted change; best effort"
+    },
+    {
+      "logicalName": "criterion_binding_reset",
+      "table": "criterion",
+      "when": "before_insert_update",
+      "purpose": "Clear a pinned query version that was not set by Bind or whose path changed, and keep a criterion on its change"
+    },
+    {
+      "logicalName": "criterion_revision",
+      "table": "criterion",
+      "when": "after_insert_update_delete",
+      "purpose": "Count criteria changes and mark an earlier validation stale"
     }
   ],
   "restResources": [
@@ -334,16 +426,20 @@
   ],
   "flowActions": [
     {
-      "logicalName": "start_change_assurance",
+      "logicalName": "start_forward_change_assurance",
       "operation": "start"
     },
     {
-      "logicalName": "get_change_assurance_status",
+      "logicalName": "get_forward_change_assurance_status",
       "operation": "status"
     },
     {
-      "logicalName": "complete_change_assurance",
+      "logicalName": "complete_forward_change_assurance",
       "operation": "complete"
+    },
+    {
+      "logicalName": "refresh_forward_change_assurance",
+      "operation": "refresh"
     },
     {
       "logicalName": "check_forward_path",
@@ -360,6 +456,18 @@
     {
       "logicalName": "refresh_forward_prediction",
       "operation": "predict_refresh"
+    },
+    {
+      "logicalName": "check_forward_capabilities",
+      "operation": "capabilities"
+    },
+    {
+      "logicalName": "bind_forward_criteria",
+      "operation": "validation_bind"
+    },
+    {
+      "logicalName": "run_forward_validation",
+      "operation": "validation_run"
     }
   ],
   "subflows": [

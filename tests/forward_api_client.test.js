@@ -381,3 +381,135 @@ test("ids Forward returns are checked before they are stored or used in later pa
     assert.throws(() => new ForwardApiClient().predict(NET, CS, "n"), (e) => e.kind === "invalid_response");
   }
 });
+
+test("a 403 keeps only the refusal's kind, never its text", () => {
+  const cases = [
+    ["Unlicensed operation: PREDICT_MODELING", { kind: "license", detail: "PREDICT_MODELING" }],
+    ["Missing permission: VIEW_NETWORK_MAPS", { kind: "rbac", detail: "VIEW_NETWORK_MAPS" }],
+    ["Your license has expired", { kind: "license_expired", detail: "" }],
+    ["AI_ENABLED is off for your organization", { kind: "org_setting", detail: "AI_ENABLED" }],
+  ];
+  for (const [message, expected] of cases) {
+    reset();
+    reply(403, { message: `${message} secret-body-text` });
+    let caught;
+    try { new ForwardApiClient()._get("/x", null); } catch (e) { caught = e; }
+    assert.equal(caught.kind, "forbidden");
+    if (message.startsWith("Your license")) assert.equal(caught.denial.kind, expected.kind);
+    else assert.deepEqual(caught.denial, expected);
+    assert.ok(!JSON.stringify(caught).includes("secret-body-text") && !caught.message.includes("secret"));
+  }
+  reset();
+  reply(403, "not json");
+  let plain;
+  try { new ForwardApiClient()._get("/x", null); } catch (e) { plain = e; }
+  assert.equal(plain.denial, null);
+  reset();
+  reply(403, { message: "Missing permission: lower-case-and spaces" });
+  try { new ForwardApiClient()._get("/x", null); } catch (e) { plain = e; }
+  assert.equal(plain.denial.detail, "", "a detail that is not a plain name is dropped");
+});
+
+test("capabilities asks with read-only calls and reports available, refused with a reason, or unknown", () => {
+  reset();
+  reply(200, []);
+  reply(200, { chats: [] });
+  const ok = new ForwardApiClient().capabilities(NET);
+  assert.deepEqual(ok, { predict: { available: true, reason: "" }, ai: { available: true, reason: "" } });
+  assert.deepEqual(world.requests.map((r) => r.method), ["get", "get"]);
+  assert.equal(world.requests[0].endpoint, "https://fwd.example.com/api/networks/235937/change-sets");
+  assert.equal(world.requests[1].endpoint, "https://fwd.example.com/api/ai-chats");
+
+  reset();
+  reply(403, { message: "Unlicensed operation: PREDICT_MODELING" });
+  reply(403, { message: "FORWARD_AI is off for your organization" });
+  const refused = new ForwardApiClient().capabilities(NET);
+  assert.deepEqual(refused.predict, { available: false, reason: "license: PREDICT_MODELING" });
+  assert.deepEqual(refused.ai, { available: false, reason: "org_setting: FORWARD_AI" });
+
+  reset();
+  reply(500, "");
+  reply(404, "");
+  const mixed = new ForwardApiClient().capabilities(NET);
+  assert.deepEqual(mixed.predict, { available: null, reason: "could not tell (server)" });
+  assert.deepEqual(mixed.ai, { available: false, reason: "not offered" });
+
+  reset();
+  reply(200, { chats: [] });
+  const noNetwork = new ForwardApiClient().capabilities("");
+  assert.equal(noNetwork.predict.available, null);
+  assert.equal(world.requests.length, 1, "no change-set call without a predict network");
+});
+
+const COMMIT = "a".repeat(40);
+const QID = "Q_" + "b".repeat(40);
+
+test("resolveQuery pins a saved path to a query id at the head commit", () => {
+  reset();
+  reply(200, JSON.stringify(COMMIT));
+  reply(200, { queryId: QID, commitCount: 1 });
+  assert.deepEqual(new ForwardApiClient().resolveQuery("/Org/My Check"), { queryId: QID, commitId: COMMIT });
+  assert.equal(world.requests[0].endpoint, "https://fwd.example.com/api/nqe/repos/org/commits/head");
+  assert.equal(world.requests[1].endpoint, `https://fwd.example.com/api/nqe/repos/org/commits/${COMMIT}/queries`);
+  assert.equal(world.requests[1].query.path, "/Org/My Check");
+});
+
+test("resolveQuery refuses a bad path before any call and an unusable answer after", () => {
+  for (const bad of ["", "no-leading-slash", "/a\nb", "/" + "x".repeat(600)]) {
+    reset();
+    assert.throws(() => new ForwardApiClient().resolveQuery(bad), (e) => e.kind === "invalid_request");
+    assert.equal(world.requests.length, 0);
+  }
+  reset();
+  reply(200, JSON.stringify("not-a-commit"));
+  assert.throws(() => new ForwardApiClient().resolveQuery("/a"), (e) => e.kind === "invalid_response");
+  reset();
+  reply(200, JSON.stringify(COMMIT));
+  reply(200, { queryId: "../x" });
+  assert.throws(() => new ForwardApiClient().resolveQuery("/a"), (e) => e.kind === "invalid_response");
+  reset();
+  reply(200, JSON.stringify(COMMIT));
+  reply(404, { message: "No query at /a" });
+  assert.throws(() => new ForwardApiClient().resolveQuery("/a"), (e) => e.kind === "not_found");
+});
+
+test("runQuery needs a pinned query and returns a count and canonical keys, never raw rows", () => {
+  reset();
+  reply(200, { items: [{ b: 1, a: [2, { z: 1, y: null }] }, { a: 1 }], totalNumItems: 2 });
+  const result = new ForwardApiClient().runQuery("1347066", QID, COMMIT, 1001);
+  assert.deepEqual(result, { count: 2, total: 2, truncated: false, rowKeys: ['{"a":[2,{"y":null,"z":1}],"b":1}', '{"a":1}'] });
+  const request = world.requests[0];
+  assert.equal(request.method, "post");
+  assert.equal(request.query.snapshotId, "1347066");
+  assert.deepEqual(JSON.parse(request.body), { queryId: QID, commitId: COMMIT, queryOptions: { limit: 1001 } });
+  assert.equal(request.logLevel, "basic");
+  for (const [qid, cid] of [["", COMMIT], [QID, ""], ["Q_short", COMMIT], [QID, "zz"]]) {
+    reset();
+    assert.throws(() => new ForwardApiClient().runQuery("1", qid, cid, 10), (e) => e.kind === "invalid_request");
+    assert.equal(world.requests.length, 0);
+  }
+});
+
+test("runQuery reports truncation from the total, and a Forward query error carries no message text", () => {
+  reset();
+  reply(200, { items: [{ a: 1 }], totalNumItems: 50 });
+  assert.equal(new ForwardApiClient().runQuery("1", QID, COMMIT, 1).truncated, true);
+  reset();
+  reply(400, { message: "Error encountered while executing the NQE query", errors: [{ message: "row had secret-device-name" }] });
+  let caught;
+  try { new ForwardApiClient().runQuery("1", QID, COMMIT, 10); } catch (e) { caught = e; }
+  assert.equal(caught.kind, "other");
+  assert.equal(caught.status, 400);
+  assert.ok(!JSON.stringify(caught).includes("secret-device-name") && !caught.message.includes("secret"));
+});
+
+test("a query error that arrives with a 200 is refused without reading its text", () => {
+  for (const body of [{ reason: "NQE_RUNTIME_ERROR", errors: [{ message: "row had secret-device-name" }] }, { items: [], errors: [{ message: "secret-device-name" }] }]) {
+    reset();
+    reply(200, body);
+    let caught;
+    try { new ForwardApiClient().runQuery("1", QID, COMMIT, 10); } catch (e) { caught = e; }
+    assert.equal(caught.kind, "invalid_response");
+    assert.ok(!JSON.stringify(caught).includes("secret-device-name"));
+  }
+});

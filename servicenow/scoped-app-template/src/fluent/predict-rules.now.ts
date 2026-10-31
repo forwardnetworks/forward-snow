@@ -39,3 +39,29 @@ BusinessRule({
     description: 'Deletes the Forward change set of a change that is being deleted. Best effort; never blocks the delete',
     protectionPolicy: 'read',
 })
+
+BusinessRule({
+    $id: Now.ID['criterion_binding_rule'],
+    name: 'Forward criterion binding reset',
+    table: '__SCOPE___criterion',
+    active: true,
+    when: 'before',
+    action: ['insert', 'update'],
+    order: 100,
+    script: Now.include('../server/ForwardCriterionRule.server.js'),
+    description: 'Clears a pinned query version that was not set by Bind or whose path changed, and keeps a criterion on its change',
+    protectionPolicy: 'read',
+})
+
+BusinessRule({
+    $id: Now.ID['criterion_revision_rule'],
+    name: 'Forward criteria revision',
+    table: '__SCOPE___criterion',
+    active: true,
+    when: 'after',
+    action: ['insert', 'update', 'delete'],
+    order: 100,
+    script: Now.include('../server/ForwardCriterionRevisionRule.server.js'),
+    description: 'Counts criteria changes on the Change Request and marks an earlier validation stale',
+    protectionPolicy: 'read',
+})

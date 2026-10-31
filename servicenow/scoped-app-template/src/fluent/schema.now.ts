@@ -1,4 +1,5 @@
 import {
+    BooleanColumn,
     DateTimeColumn,
     IntegerColumn,
     ReferenceColumn,
@@ -130,6 +131,80 @@ export const __SCOPE___predict_run = Table({
     },
 })
 
+export const __SCOPE___criterion = Table({
+    name: '__SCOPE___criterion',
+    label: 'Forward Validation Criterion',
+    audit: true,
+    allowWebServiceAccess: false,
+    accessibleFrom: 'package_private',
+    schema: {
+        change: ReferenceColumn({ label: 'Change Request', referenceTable: 'change_request', mandatory: true, cascadeRule: 'delete' }),
+        name: StringColumn({ label: 'Name', maxLength: 128, mandatory: true }),
+        query_path: StringColumn({ label: 'Forward Query Path', maxLength: 512, mandatory: true }),
+        expectation: StringColumn({
+            label: 'Expectation',
+            default: 'no_rows',
+            choices: { no_rows: 'No rows', some_rows: 'Some rows', no_diff: 'Same rows as the baseline' },
+        }),
+        severity: StringColumn({
+            label: 'Severity',
+            default: 'error',
+            choices: { info: 'Info', warning: 'Warning', error: 'Error', critical: 'Critical' },
+        }),
+        active: BooleanColumn({ label: 'Active', default: true }),
+        // Set by Bind only; a user cannot write them (see the field ACLs).
+        query_id: StringColumn({ label: 'Pinned Query ID', maxLength: 64 }),
+        commit_id: StringColumn({ label: 'Pinned Commit ID', maxLength: 64 }),
+        binding_note: StringColumn({ label: 'Binding Note', maxLength: 200 }),
+    },
+})
+
+export const __SCOPE___validation_run = Table({
+    name: '__SCOPE___validation_run',
+    label: 'Forward Validation Run',
+    audit: false,
+    allowWebServiceAccess: false,
+    accessibleFrom: 'package_private',
+    schema: {
+        change: ReferenceColumn({ label: 'Change Request', referenceTable: 'change_request', cascadeRule: 'delete' }),
+        // The change sys_id while the run is active, the run's own sys_id once it ends. Unique: one active run per change.
+        claim: StringColumn({ label: 'Active Claim', maxLength: 32, unique: true, mandatory: true }),
+        outcome: StringColumn({
+            label: 'Outcome',
+            default: 'running',
+            choices: { running: 'Running', complete: 'Complete', error: 'Error' },
+        }),
+        score: IntegerColumn({ label: 'Score' }),
+        revision: IntegerColumn({ label: 'Criteria Revision' }),
+        snapshot_id: StringColumn({ label: 'Forward Snapshot ID', maxLength: 64 }),
+        baseline_snapshot_id: StringColumn({ label: 'Baseline Snapshot ID', maxLength: 64 }),
+        passed: IntegerColumn({ label: 'Passed' }),
+        failed: IntegerColumn({ label: 'Failed' }),
+        errored: IntegerColumn({ label: 'Errored' }),
+        skipped: IntegerColumn({ label: 'Skipped' }),
+        started_ms: StringColumn({ label: 'Started (epoch ms)', maxLength: 20 }),
+        detail: StringColumn({ label: 'Detail', maxLength: 200 }),
+    },
+})
+
+export const __SCOPE___validation_result = Table({
+    name: '__SCOPE___validation_result',
+    label: 'Forward Validation Result',
+    audit: false,
+    allowWebServiceAccess: false,
+    accessibleFrom: 'package_private',
+    schema: {
+        run: ReferenceColumn({ label: 'Validation Run', referenceTable: '__SCOPE___validation_run', mandatory: true, cascadeRule: 'delete' }),
+        criterion: ReferenceColumn({ label: 'Criterion', referenceTable: '__SCOPE___criterion', cascadeRule: 'clear' }),
+        // The version that was actually run, kept even if the criterion is re-pinned or deleted later.
+        query_id: StringColumn({ label: 'Query ID Run', maxLength: 64 }),
+        commit_id: StringColumn({ label: 'Commit ID Run', maxLength: 64 }),
+        status: StringColumn({ label: 'Status', choices: { pass: 'Pass', fail: 'Fail', error: 'Error', skipped: 'Skipped' } }),
+        row_count: IntegerColumn({ label: 'Row Count' }),
+        detail: StringColumn({ label: 'Detail', maxLength: 200 }),
+    },
+})
+
 export const change_request = Table({
     augments: 'change_request',
     schema: {
@@ -149,6 +224,16 @@ export const change_request = Table({
                 failed: 'Failed',
             },
         }),
+        __SCOPE___validation_status: StringColumn({
+            label: 'Forward Validation Status',
+            default: 'not_run',
+            // incomplete: nothing failed but a criterion was skipped. stale: criteria changed after the run.
+            choices: { not_run: 'Not run', pass: 'Pass', fail: 'Fail', error: 'Error', incomplete: 'Incomplete', stale: 'Stale' },
+        }),
+        // Blank when nothing was measured; the status is the field to act on.
+        __SCOPE___validation_score: IntegerColumn({ label: 'Forward Validation Score' }),
+        __SCOPE___validation_snapshot_id: StringColumn({ label: 'Forward Validation Snapshot ID', maxLength: 64 }),
+        __SCOPE___criteria_revision: IntegerColumn({ label: 'Forward Criteria Revision', default: 0 }),
         __SCOPE___predict_revision: IntegerColumn({ label: 'Forward Predict Proposal Revision', default: 0 }),
         __SCOPE___assurance_decision: StringColumn({
             label: 'Forward Assurance Decision',

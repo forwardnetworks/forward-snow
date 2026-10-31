@@ -354,3 +354,152 @@ export const refreshForwardPrediction = Action(
         })
     },
 )
+
+export const checkForwardCapabilities = Action(
+    {
+        $id: Now.ID['check_forward_capabilities_action'],
+        name: 'Check Forward Capabilities',
+        internalName: 'check_forward_capabilities',
+        description: 'Ask Forward whether this organisation can use Predict (in the predict network) and Forward AI, with the reason when it cannot. Read only; detection only, no AI calls are made.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: {},
+        outputs: {
+            predict_available: StringColumn({ label: 'Predict available (true, false or unknown)', maxLength: 8 }),
+            predict_reason: StringColumn({ label: 'Predict reason', maxLength: 200 }),
+            ai_available: StringColumn({ label: 'Forward AI available (true, false or unknown)', maxLength: 8 }),
+            ai_reason: StringColumn({ label: 'Forward AI reason', maxLength: 200 }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['check_forward_capabilities_script'], label: 'Check Forward Capabilities' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/check-forward-capabilities.server.js'),
+                inputVariables: {},
+                outputVariables: {
+                    predict_available: StringColumn({ label: 'Predict available (true, false or unknown)', maxLength: 8 }),
+                    predict_reason: StringColumn({ label: 'Predict reason', maxLength: 200 }),
+                    ai_available: StringColumn({ label: 'Forward AI available (true, false or unknown)', maxLength: 8 }),
+                    ai_reason: StringColumn({ label: 'Forward AI reason', maxLength: 200 }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            predict_available: wfa.dataPill(step.predict_available, 'string'),
+            predict_reason: wfa.dataPill(step.predict_reason, 'string'),
+            ai_available: wfa.dataPill(step.ai_available, 'string'),
+            ai_reason: wfa.dataPill(step.ai_reason, 'string'),
+        })
+    },
+)
+
+export const bindForwardCriteria = Action(
+    {
+        $id: Now.ID['bind_forward_criteria_action'],
+        name: 'Bind Forward Criteria',
+        internalName: 'bind_forward_criteria',
+        description: 'Pin each active validation criterion of a Change Request to a saved Forward query version. Read only against Forward. Run the calling flow as the user, not as System.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: {
+        change_sys_id: StringColumn({ label: 'Change Request sys_id', mandatory: true, maxLength: 32 }),
+            rebind: StringColumn({ label: 'Rebind already pinned criteria (true or blank)', maxLength: 5 }),
+        },
+        outputs: {
+            bound: IntegerColumn({ label: 'Criteria bound' }),
+            failed: IntegerColumn({ label: 'Criteria that could not be bound' }),
+            kept: IntegerColumn({ label: 'Criteria left as pinned' }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['bind_forward_criteria_script'], label: 'Bind Forward Criteria' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/bind-forward-criteria.server.js'),
+                inputVariables: {
+                    change_sys_id: { label: 'Change Request sys_id', value: wfa.dataPill(params.inputs.change_sys_id, 'string') },
+                    rebind: { label: 'Rebind already pinned criteria', value: wfa.dataPill(params.inputs.rebind, 'string') },
+                },
+                outputVariables: {
+                    bound: IntegerColumn({ label: 'Criteria bound' }),
+                    failed: IntegerColumn({ label: 'Criteria that could not be bound' }),
+                    kept: IntegerColumn({ label: 'Criteria left as pinned' }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            bound: wfa.dataPill(step.bound, 'integer'),
+            failed: wfa.dataPill(step.failed, 'integer'),
+            kept: wfa.dataPill(step.kept, 'integer'),
+        })
+    },
+)
+
+export const runForwardValidation = Action(
+    {
+        $id: Now.ID['run_forward_validation_action'],
+        name: 'Run Forward Validation',
+        internalName: 'run_forward_validation',
+        description: 'Run the pinned validation criteria of a Change Request against a Forward snapshot and record a verdict per criterion and a score. Read only against Forward; row content is never stored. Advisory unless a native approval policy reads the result. Run the calling flow as the user, not as System.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: {
+        change_sys_id: StringColumn({ label: 'Change Request sys_id', mandatory: true, maxLength: 32 }),
+        snapshot_id: StringColumn({ label: 'Snapshot ID (blank for the newest processed)', maxLength: 64 }),
+        baseline_snapshot_id: StringColumn({ label: 'Baseline snapshot ID (blank for the assurance baseline)', maxLength: 64 }),
+        },
+        outputs: {
+            status: StringColumn({ label: 'Validation status', maxLength: 16 }),
+            score: StringColumn({ label: 'Score (blank when nothing was measured)', maxLength: 8 }),
+            run_id: StringColumn({ label: 'Run sys_id', maxLength: 32 }),
+            passed: IntegerColumn({ label: 'Passed' }),
+            failed: IntegerColumn({ label: 'Failed' }),
+            errored: IntegerColumn({ label: 'Errored' }),
+            skipped: IntegerColumn({ label: 'Skipped' }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['run_forward_validation_script'], label: 'Run Forward Validation' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/run-forward-validation.server.js'),
+                inputVariables: {
+                    change_sys_id: { label: 'Change Request sys_id', value: wfa.dataPill(params.inputs.change_sys_id, 'string') },
+                    snapshot_id: { label: 'Snapshot ID (blank for the newest processed)', value: wfa.dataPill(params.inputs.snapshot_id, 'string') },
+                    baseline_snapshot_id: { label: 'Baseline snapshot ID (blank for the assurance baseline)', value: wfa.dataPill(params.inputs.baseline_snapshot_id, 'string') },
+                },
+                outputVariables: {
+                    status: StringColumn({ label: 'Validation status', maxLength: 16 }),
+                    score: StringColumn({ label: 'Score (blank when nothing was measured)', maxLength: 8 }),
+                    run_id: StringColumn({ label: 'Run sys_id', maxLength: 32 }),
+                    passed: IntegerColumn({ label: 'Passed' }),
+                    failed: IntegerColumn({ label: 'Failed' }),
+                    errored: IntegerColumn({ label: 'Errored' }),
+                    skipped: IntegerColumn({ label: 'Skipped' }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            status: wfa.dataPill(step.status, 'string'),
+            score: wfa.dataPill(step.score, 'string'),
+            run_id: wfa.dataPill(step.run_id, 'string'),
+            passed: wfa.dataPill(step.passed, 'integer'),
+            failed: wfa.dataPill(step.failed, 'integer'),
+            errored: wfa.dataPill(step.errored, 'integer'),
+            skipped: wfa.dataPill(step.skipped, 'integer'),
+        })
+    },
+)

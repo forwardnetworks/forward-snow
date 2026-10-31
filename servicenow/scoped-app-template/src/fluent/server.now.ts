@@ -38,6 +38,12 @@ ScriptInclude({
     script: Now.include('../server/ForwardPredict.server.js'),
 })
 ScriptInclude({
+    $id: Now.ID['forward_validation'], name: 'ForwardValidation',
+    apiName: '__SCOPE__.ForwardValidation', active: true, clientCallable: false,
+    accessibleFrom: 'package_private', protectionPolicy: 'read',
+    script: Now.include('../server/ForwardValidation.server.js'),
+})
+ScriptInclude({
     $id: Now.ID['forward_path_check'], name: 'ForwardPathCheck',
     apiName: '__SCOPE__.ForwardPathCheck', active: true, clientCallable: false,
     accessibleFrom: 'package_private', protectionPolicy: 'read',
@@ -82,4 +88,29 @@ UiAction({
     roles: [adminRole, auditorRole, operatorRole],
     condition: "gs.getProperty('__SCOPE__.forward.maps_enabled', 'true') == 'true'",
     script: Now.include('../server/ForwardMapsUiAction.server.js'),
+})
+
+UiAction({
+    $id: Now.ID['forward_predict_proposals_ui_action'], table: 'change_request', name: 'Forward Predict Proposals',
+    actionName: 'forward_predict_proposals', active: true, form: { showButton: true, style: 'unstyled' },
+    showInsert: false, showUpdate: true, hint: 'Open the commands proposed for this change, per device',
+    roles: [adminRole, operatorRole],
+    condition: "gs.getProperty('__SCOPE__.forward.predict_enabled', 'false') == 'true'",
+    script: Now.include('../server/ForwardPredictProposalsUiAction.server.js'),
+})
+UiAction({
+    $id: Now.ID['forward_predict_start_ui_action'], table: 'change_request', name: 'Start Forward Prediction',
+    actionName: 'forward_predict_start', active: true, form: { showButton: true, style: 'unstyled' },
+    showInsert: false, showUpdate: true, hint: 'Ask Forward Predict about the proposed commands (writes a change set to Forward)',
+    roles: [adminRole, operatorRole],
+    client: { isClient: true, onClick: 'confirmForwardPredict()' },
+    condition: "gs.getProperty('__SCOPE__.forward.predict_enabled', 'false') == 'true' && current.state != 3 && current.state != 4",
+    script: Now.include('../server/ForwardPredictStartUiAction.server.js'),
+})
+UiAction({
+    $id: Now.ID['forward_predict_refresh_ui_action'], table: 'change_request', name: 'Refresh Forward Prediction',
+    actionName: 'forward_predict_refresh', active: true, form: { showButton: true, style: 'unstyled' },
+    showInsert: false, showUpdate: true, hint: 'Check whether the Forward prediction has finished',
+    roles: [adminRole, operatorRole],
+    script: Now.include('../server/ForwardPredictRefreshUiAction.server.js'),
 })

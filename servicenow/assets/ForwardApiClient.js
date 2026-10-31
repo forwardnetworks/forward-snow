@@ -37,6 +37,84 @@ ForwardApiClient.prototype = {
     return { maps: maps, truncated: items.length > 1000 };
   },
 
+  // What this organisation can do, found by asking with read-only calls: listing change sets answers "may it use
+  // Predict?" and listing AI chats answers "is Forward AI on?". available is true, false, or null when it cannot tell.
+  capabilities: function (predictNetworkId) {
+    var self = this;
+    var ask = function (call) {
+      try {
+        call();
+        return { available: true, reason: "" };
+      } catch (e) {
+        if (e && e.denial) return { available: false, reason: e.denial.kind + (e.denial.detail ? ": " + e.denial.detail : "") };
+        if (e && e.status >= 200 && e.status < 300) return { available: true, reason: "" };
+        if (e && e.kind === "forbidden") return { available: false, reason: "refused without a stated cause" };
+        if (e && e.kind === "not_found") return { available: false, reason: "not offered" };
+        return { available: null, reason: "could not tell (" + (e && e.kind ? e.kind : "error") + ")" };
+      }
+    };
+    return {
+      predict: predictNetworkId
+        ? ask(function () { self._get(self._changeSets(predictNetworkId), null); })
+        : { available: null, reason: "no predict network is configured" },
+      ai: ask(function () { self._get("/ai-chats", { limit: "1" }); }),
+    };
+  },
+
+  // ---- NQE queries (read only) ----
+
+  headCommit: function () {
+    var commit = this._get("/nqe/repos/org/commits/head", null);
+    if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit)) {
+      throw this._failure("invalid_response", 200, "Forward did not return a usable head commit");
+    }
+    return commit;
+  },
+
+  // Pins a saved org query path to a query id at the current head commit. A missing path is a not_found error.
+  resolveQuery: function (queryPath) {
+    var path = this._text(queryPath, "query path", 512);
+    if (path.charAt(0) !== "/") throw this._failure("invalid_request", 0, "query path is invalid");
+    var commit = this.headCommit();
+    var body = this._get("/nqe/repos/org/commits/" + commit + "/queries", { path: path });
+    var id = body && typeof body.queryId === "string" ? body.queryId : "";
+    if (!/^Q_[0-9a-f]{40}$/.test(id)) throw this._failure("invalid_response", 200, "Forward did not return a usable query id");
+    return { queryId: id, commitId: commit };
+  },
+
+  // Runs a pinned query on one snapshot. Rows are reduced to a count and, for set comparison only, canonical keys that
+  // the caller must keep in memory. truncated is true when Forward holds more rows than limit.
+  runQuery: function (snapshotId, queryId, commitId, limit) {
+    if (!/^Q_[0-9a-f]{40}$/.test(String(queryId || "")) || !/^[0-9a-f]{40}$/.test(String(commitId || ""))) {
+      throw this._failure("invalid_request", 0, "query is not pinned");
+    }
+    var rows = this._integer(limit, "limit", 1, 5000);
+    var body = this._request("post", "/nqe", { snapshotId: this._identifier(snapshotId, "snapshotId") },
+      { json: { queryId: queryId, commitId: commitId, queryOptions: { limit: rows } } });
+    // A query error can come back with a 200 and the error in the body; it is never read, only refused.
+    if (body && (body.reason || (Array.isArray(body.errors) && body.errors.length))) {
+      throw this._failure("invalid_response", 200, "Forward could not run the query");
+    }
+    var items = body && Array.isArray(body.items) ? body.items : null;
+    if (!items) throw this._failure("invalid_response", 200, "Forward query result was not a list");
+    var total = Number(body.totalNumItems);
+    var keys = [];
+    for (var i = 0; i < items.length; i++) keys.push(this._canonical(items[i]));
+    return {
+      count: items.length,
+      total: isFinite(total) && total >= items.length ? total : items.length,
+      truncated: isFinite(total) ? total > items.length : items.length >= rows,
+      rowKeys: keys,
+    };
+  },
+
+  _canonical: function (value) {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return "[" + value.map(this._canonical, this).join(",") + "]";
+    var names = Object.keys(value).sort();
+    return "{" + names.map(function (name) { return JSON.stringify(name) + ":" + this._canonical(value[name]); }, this).join(",") + "}";
+  },
+
   // ---- Change sets and Predict (unpublished Forward routes; shapes follow the forward-python-sdk spec) ----
 
   createChangeSet: function (networkId, args) {
@@ -203,7 +281,7 @@ ForwardApiClient.prototype = {
     return this._request("get", relativePath, query, null);
   },
 
-  // Writes never carry a body into the REST log (log level "basic"), and a failed write is never retried here.
+  // No body reaches the REST log (log level "basic"), and a failed write is never retried here.
   // options: { json: object } or { text: string }, plus { allow404: true } for deletes.
   _request: function (method, relativePath, query, options) {
     var opts = options || {};
@@ -213,7 +291,8 @@ ForwardApiClient.prototype = {
     rm.setBasicAuth(this._username, this._password);
     rm.setHttpTimeout(this._timeoutMs);
     rm.setRequestHeader("Accept", "application/json");
-    if (method !== "get") rm.setLogLevel("basic");
+    // Basic for every request: request bodies carry commands, and response bodies can carry what Forward returned.
+    rm.setLogLevel("basic");
     if (opts.json !== undefined) {
       rm.setRequestHeader("Content-Type", "application/json");
       rm.setRequestBody(JSON.stringify(opts.json));
@@ -232,7 +311,11 @@ ForwardApiClient.prototype = {
     var status = response.getStatusCode();
     var text = String(response.getBody() || "");
     if (opts.allow404 && status === 404) return null;
-    if (status < 200 || status >= 300) throw this._failure(this._kindFor(status), status, "Forward API returned " + status);
+    if (status < 200 || status >= 300) {
+      var failure = this._failure(this._kindFor(status), status, "Forward API returned " + status);
+      if (status === 403) failure.denial = this._denial(text);
+      throw failure;
+    }
     if (this._utf8ByteLength(text) > this._maxResponseBytes) {
       throw this._failure("invalid_response", status, "Forward API response is too large");
     }
@@ -242,6 +325,34 @@ ForwardApiClient.prototype = {
     } catch (e) {
       throw this._failure("invalid_response", status, "Forward API returned invalid JSON");
     }
+  },
+
+  // Forward sends no code for a refusal, only wording. Read just the kind (and a setting or operation name that is
+  // all capitals) from the wordings the forward-python-sdk documents. The text itself is never kept. A hint, not a branch.
+  _denial: function (text) {
+    var message = "";
+    try {
+      var body = JSON.parse(text);
+      message = String(body && body.message || "").replace(/^\s+|\s+$/g, "");
+    } catch (e) {
+      return null;
+    }
+    var patterns = [
+      ["license", /^Unlicensed operation:\s*(\S+)/],
+      ["rbac", /^Missing permission:\s*(\S+)/],
+      ["rbac", /^No permission for network operation\s+(\S+)/],
+      ["license_expired", /license has expired/],
+      ["org_setting", /^([A-Z0-9_]+) is (?:on|off) for your organization/],
+      ["deployment_setting", /^([A-Z0-9_]+) is (?:on|off) for your deployment/],
+      ["authority", /^(.+?) authority required/],
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      var match = patterns[i][1].exec(message);
+      if (!match) continue;
+      var detail = match[1] && /^[A-Za-z0-9_]{1,64}$/.test(match[1]) ? match[1] : "";
+      return { kind: patterns[i][0], detail: detail };
+    }
+    return null;
   },
 
   _kindFor: function (status) {

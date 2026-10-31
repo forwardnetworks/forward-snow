@@ -65,3 +65,7 @@ Property({
     $id: Now.ID['forward_predict_max_devices'], name: '__SCOPE__.forward.predict_max_devices', type: 'integer', value: 10,
     description: 'Maximum devices one Forward Predict proposal may cover', roles: { read: [adminRole], write: [adminRole] },
 })
+Property({
+    $id: Now.ID['forward_validation_max_criteria'], name: '__SCOPE__.forward.validation_max_criteria', type: 'integer', value: 20,
+    description: 'Maximum validation criteria one Forward validation run may evaluate', roles: { read: [adminRole], write: [adminRole] },
+})

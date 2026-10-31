@@ -20,8 +20,9 @@ change control around the Change Request (policies, approvals, validation runs, 
 per device, and Forward AI detection. Out of scope: NetBox-specific inventory sync, branching and the NQE data maps
 that feed NetBox models.
 
-Phases, each shippable on its own: (1) client and path search, (2) Maps, (3) Predict, (4) change-control parity
-(policies, reviewer rules, validation runs), (5) Forward AI detection.
+Phases, each shippable on its own: (1) client and path search, (2) Maps, (3) Predict, (4) change-control parity, (5) Forward AI
+detection. Phase 4 is native-first: ServiceNow already has change approvals, so it adds Forward-answered criteria and
+validation runs (see `2026-10-31-forward-validation.md`) instead of policies and reviewer rules.
 
 ## Verified on the target instance (dev PDI, 2026-10-30, read-only)
 

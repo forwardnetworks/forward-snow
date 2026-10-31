@@ -334,6 +334,12 @@ ForwardPredict.prototype = {
     if (e && e.reason === "validation") return "Forward refused the proposed commands";
     if (e && e.reason === "no_snapshot") return "no processed snapshot in the predict network";
     if (e && e.lostClaim) return "the run was ended by another request";
+    if (e && e.kind === "forbidden" && e.denial) {
+      var why = { license: "the Forward licence does not include Predict", license_expired: "the Forward licence has expired",
+        rbac: "the Forward account lacks permission", org_setting: "Predict is switched off for the Forward organisation",
+        deployment_setting: "Predict is switched off for the Forward deployment", authority: "a higher Forward authority is required" };
+      if (why[e.denial.kind]) return why[e.denial.kind];
+    }
     var kinds = {
       unauthorized: "Forward rejected the credentials",
       forbidden: "Forward refused the request (access or licence)",

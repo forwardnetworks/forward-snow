@@ -91,6 +91,8 @@ Set lifecycle management for the same application.
 Predict asks Forward what the commands proposed for a Change Request would do, in a dedicated network, and shows the
 outcome. Nothing in the assurance gate, close guard or verdict reads it.
 
+- The confirmation dialog on **Start Forward Prediction** is a prompt for intent, not a security control. The server checks
+  roles, write access to the change, the opt-in and that the change is open every time.
 - Enable it only after naming a dedicated network in `forward.predict_network_id` (never the production network) and
   setting `forward.predict_enabled` to true. Every start also needs an explicit confirmation.
 - The Forward API credential bound to the `Forward API` alias must be allowed to create change sets in that network.
@@ -105,3 +107,25 @@ outcome. Nothing in the assurance gate, close guard or verdict reads it.
 - The change-set routes are not part of Forward's published API. The create, validate, stage, commit, predict, refresh
   and cleanup calls have run once from this application against a Forward test account (see the Predict plan); a
   licence refusal, other device types and the close and cancel cleanup have not. Treat your first run as a test.
+
+## Forward validation criteria (read only)
+
+Criteria are Forward queries with an expectation, answered on a Forward snapshot. They sit beside ServiceNow's own
+change approvals and do not replace them.
+
+1. Add criteria to a Change Request: a saved org query path, an expectation (`no rows`, `some rows`, or `same rows as the
+   baseline`) and a severity.
+2. Run **Bind Forward Criteria**. It pins each criterion to the query version Forward holds now. A criterion that is not
+   pinned never runs. Pinned criteria are left alone unless you ask to rebind, because rebinding moves the version.
+3. Run **Run Forward Validation**. It checks each pinned criterion on the network in `forward.network_id` (the newest
+   processed snapshot unless you name one) and records a verdict per criterion and a score. Rows are never stored.
+
+The Change Request carries `Forward Validation Status` (`pass`, `fail`, `error`, `incomplete`, `stale`, `not_run`), the
+score, and the snapshot used. Only the application can write them. Act on the status: the score is blank when nothing was
+measured, and `pass` needs every criterion measured. Editing, adding or removing a criterion makes an earlier result
+`stale`, and a stale result keeps no score. A native Change Approval Policy or flow can read these fields. The application's
+own close guard does not. The application writes them without running other rules (so the close guard is not triggered), which
+also means a record-triggered flow will not fire on a change to them: have the flow or policy read the status when it runs,
+rather than wait for it to change. An explicit snapshot must be a processed, non-draft, non-fork, non-prediction snapshot of the
+configured network.
+

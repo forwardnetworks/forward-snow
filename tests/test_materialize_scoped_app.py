@@ -72,6 +72,23 @@ class ScopedAppMaterializerTests(unittest.TestCase):
         self.assertNotIn(".update(", rendered)
         self.assertNotIn("demo", rendered.lower())
 
+    def test_predict_script_include_is_rendered_into_the_project_with_the_scope(self) -> None:
+        import tempfile
+
+        rendered = materializer.render_predict("x_acme_fca")
+        self.assertIn("x_acme_fca.forward.predict_enabled", rendered)
+        self.assertNotIn("__SCOPE__", rendered)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            materializer.write_sdk_sources(output, "x_acme_fca")
+            written = (output / "src" / "server" / "ForwardPredict.server.js").read_text()
+            self.assertEqual(written, rendered)
+            for name in ("ForwardPredictCloseRule", "ForwardPredictDeleteRule", "ForwardPredictRevisionRule"):
+                rule = (output / "src" / "server" / f"{name}.server.js").read_text()
+                self.assertNotIn("__SCOPE__", rule)
+            revision = (output / "src" / "server" / "ForwardPredictRevisionRule.server.js").read_text()
+            self.assertIn("x_acme_fca_predict_revision", revision)
+
     def test_scope_id_is_written_to_the_project_config(self) -> None:
         import json
         import tempfile

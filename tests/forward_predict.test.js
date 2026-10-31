@@ -414,3 +414,17 @@ test("the prediction is advisory: no assurance asset reads the predict tables or
     assert.ok(!/predict/i.test(fs.readFileSync(path.join(dir, file), "utf8")), `${file} must not read Predict data`);
   }
 });
+
+test("a Forward refusal is explained by its kind and never by its text", () => {
+  const cases = [["license", /does not include Predict/], ["license_expired", /expired/], ["rbac", /lacks permission/], ["org_setting", /switched off for the Forward organisation/]];
+  for (const [kind, pattern] of cases) {
+    reset();
+    const client = fakeClient({ createChangeSet: () => { throw Object.assign(failure("forbidden"), { denial: { kind, detail: "PREDICT_MODELING" } }); } });
+    let message = "";
+    try { new ForwardPredict(client).start(CHANGE, "true"); } catch (e) { message = e.message; }
+    assert.match(message, pattern, kind);
+    assert.ok(!message.includes(SECRET));
+  }
+  reset();
+  assert.throws(() => new ForwardPredict(fakeClient({ createChangeSet: () => { throw failure("forbidden"); } })).start(CHANGE, "true"), /access or licence/);
+});
