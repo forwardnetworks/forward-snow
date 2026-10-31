@@ -99,10 +99,27 @@ and polling by subflow (manual refresh first).
 - A test proves nothing reads the predict tables from the close guard, service or ingest assets.
 - A behavioural test proves a command string never reaches `gs` logging, thrown errors, run `detail`, action outputs or the REST log level setting.
 - Tests for the unique claim, the lost-claim cleanup, expiry, the stale counter (including a delete), the refresh state map, and cleanup on every path.
-- **Not verified until a live run:** every Forward call above on a Predict-licensed org, whether a change set can be
+- **Live result:** see Live check below. What it did not cover is the remaining unverified list.
+- **Originally unverified (now partly answered):** every Forward call above on a Predict-licensed org, whether a change set can be
   created in the chosen network on its newest snapshot, and how long processing takes. The live run needs a
   non-customer licensed org and the operator's go because it writes.
 
 ## Rollback
 
 Switch `forward.predict_enabled` off; cleanup still runs. Before uninstalling, run cleanup for every open run, because the ids go with the tables. Change sets can also be found in Forward by their run tag and deleted there.
+
+## Live check (2026-10-31, Brazil PDI to a synthetic Forward demo network)
+
+Run through the shipped `ForwardPredict`, `ForwardApiClient` and actions' code on the PDI, with the `Forward API` alias
+bound to a Forward test account. A temporary one-device workspace (1-day retention) was forked from a synthetic change-control
+demo network, used, and deleted afterwards. Forward held no change sets when it finished.
+
+- Verified: workspace creation; the workspace baseline is processed within about 30 seconds; `change-sets` create returns
+  an id like `CHG-<n>` and accepts a tag; `validate` returns `commandErrors` (with `lineNumber`) and the refusal path
+  ended the run, deleted the change set and released the claim; stage, commit (with a non-blank note) and predict
+  returned a predicted snapshot id; `predicted-snapshots` reported it `PROCESSED` within about a minute and the run read
+  `answered`; `cleanup` deleted the change set (204) and the run read `cleaned` with the claim released; the before-delete
+  rule ran on deleting the change without blocking it; the closed-change refusal fired on a closed change.
+- Found: a command the device does not accept (`ntp server ...` on a cEOS device) is refused at validation, as intended.
+- Not verified: a licence or permission refusal (the account is licensed), a PAN-OS device, a large network, the content of
+  the predicted snapshot, the async close/cancel rule firing on a real close, and what the `basic` REST log level records.

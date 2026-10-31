@@ -102,5 +102,6 @@ outcome. Nothing in the assurance gate, close guard or verdict reads it.
 - Cleanup deletes the Forward change set when a change closes, is cancelled or is deleted, and before a new prediction.
   Run it for every open prediction before uninstalling the application, because the change-set ids are removed with
   the tables. Change sets are tagged `forward-change-assurance` in Forward, so leftovers can also be found there.
-- The change-set routes are not part of Forward's published API and have not been verified against a live Forward from
-  this application. Treat the first run as a test, in a non-customer organisation with a Predict licence.
+- The change-set routes are not part of Forward's published API. The create, validate, stage, commit, predict, refresh
+  and cleanup calls have run once from this application against a Forward test account (see the Predict plan); a
+  licence refusal, other device types and the close and cancel cleanup have not. Treat your first run as a test.
