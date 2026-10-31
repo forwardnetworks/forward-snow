@@ -118,4 +118,6 @@ A plan review approved the native-first decision and required these changes, all
 - Query results over the response-size limit (`forward.max_response_bytes`) are an `error` for that criterion, never a pass.
 - The Refresh Forward Prediction button has no opt-in condition on purpose, so a run can still be finished after the
   feature is switched off.
-- Not verified: how Forward words a real query error, the Predict buttons in a browser, and licence-refusal wording.
+- Verified live (2026-10-31): a query that needs a parameter is answered by Forward with a 4xx; the criterion became `error`
+  with a fixed phrase and a penalty, and nothing from Forward's message was kept.
+- Not verified: the Predict buttons clicked in a browser (their server halves ran on the instance), and licence-refusal wording.

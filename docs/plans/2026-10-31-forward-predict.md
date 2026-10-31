@@ -123,3 +123,13 @@ demo network, used, and deleted afterwards. Forward held no change sets when it 
 - Found: a command the device does not accept (`ntp server ...` on a cEOS device) is refused at validation, as intended.
 - Not verified: a licence or permission refusal (the account is licensed), a PAN-OS device, a large network, the content of
   the predicted snapshot, the async close/cancel rule firing on a real close, and what the `basic` REST log level records.
+
+### Cleanup rule and buttons (2026-10-31)
+
+- Verified on the PDI: cancelling a change fired the async cleanup rule. A finished run's change set was deleted (Forward's 404
+  for a change set that does not exist counted as gone), a stuck `starting` run was ended as "stopped by cleanup" with its
+  claim released, and the proposed commands were purged. The change model does not allow jumping to Closed from New, so the
+  Closed branch of the same rule condition was not exercised.
+- Verified on the PDI: the server halves of the Proposals, Start (refuses while Predict is off, with its fixed phrase) and
+  Refresh buttons. The Start confirmation dialog runs in the browser and has not been clicked.
+
