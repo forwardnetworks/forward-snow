@@ -83,6 +83,34 @@
         "auditor"
       ],
       "uniqueKeys": []
+    },
+    {
+      "logicalName": "predict_proposal",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "operator"
+      ],
+      "readRoles": [
+        "admin",
+        "operator"
+      ],
+      "uniqueKeys": []
+    },
+    {
+      "logicalName": "predict_run",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": [
+        "claim"
+      ]
     }
   ],
   "changeRequestCorrelation": [
@@ -115,6 +143,11 @@
         "warn",
         "fail"
       ]
+    },
+    {
+      "logicalName": "predict_revision",
+      "type": "integer",
+      "default": 0
     }
   ],
   "connectionAliases": [
@@ -199,6 +232,26 @@
       "type": "boolean",
       "secret": false,
       "default": true
+    },
+    {
+      "logicalName": "forward.predict_enabled",
+      "type": "boolean",
+      "secret": false,
+      "default": false
+    },
+    {
+      "logicalName": "forward.predict_network_id",
+      "type": "string",
+      "secret": false,
+      "default": ""
+    },
+    {
+      "logicalName": "forward.predict_max_devices",
+      "type": "integer",
+      "secret": false,
+      "default": 10,
+      "minimum": 1,
+      "maximum": 50
     }
   ],
   "scriptIncludes": [
@@ -225,7 +278,7 @@
     {
       "logicalName": "ForwardApiClient",
       "clientCallable": false,
-      "purpose": "Read-only Forward API calls through the bound Forward API alias, with typed errors and bounded summaries"
+      "purpose": "Forward API calls through the bound Forward API alias, with typed errors and bounded summaries. Reads, plus change-set writes for Predict"
     },
     {
       "logicalName": "ForwardPathCheck",
@@ -236,6 +289,11 @@
       "logicalName": "ForwardMapsLookup",
       "clientCallable": false,
       "purpose": "Finds Forward Network Maps whose name matches a Change Request's configuration item, location or service; read only"
+    },
+    {
+      "logicalName": "ForwardPredict",
+      "clientCallable": false,
+      "purpose": "Advisory Forward Predict lifecycle: validate, stage, commit and predict a proposal in a dedicated network, then refresh and clean up; writes to Forward only after opt-in and confirmation"
     }
   ],
   "businessRules": [
@@ -244,6 +302,24 @@
       "table": "change_request",
       "when": "before_update",
       "purpose": "Abort assurance-bound close transitions until all published evidence passes"
+    },
+    {
+      "logicalName": "predict_proposal_revision",
+      "table": "predict_proposal",
+      "when": "after_insert_update_delete",
+      "purpose": "Count proposal changes so an earlier prediction shows as stale"
+    },
+    {
+      "logicalName": "predict_close_cleanup",
+      "table": "change_request",
+      "when": "async_update",
+      "purpose": "Delete the Forward change set and proposals after close or cancel; best effort"
+    },
+    {
+      "logicalName": "predict_delete_cleanup",
+      "table": "change_request",
+      "when": "before_delete",
+      "purpose": "Delete the Forward change set of a deleted change; best effort"
     }
   ],
   "restResources": [
@@ -276,6 +352,14 @@
     {
       "logicalName": "list_forward_maps",
       "operation": "maps"
+    },
+    {
+      "logicalName": "start_forward_prediction",
+      "operation": "predict_start"
+    },
+    {
+      "logicalName": "refresh_forward_prediction",
+      "operation": "predict_refresh"
     }
   ],
   "subflows": [

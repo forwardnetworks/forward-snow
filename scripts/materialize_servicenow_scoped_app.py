@@ -88,6 +88,11 @@ def render_maps_lookup(scope: str) -> str:
     return text.replace("__SCOPE__", scope)
 
 
+def render_predict(scope: str) -> str:
+    text = (ASSET_ROOT / "ForwardPredict.js").read_text()
+    return text.replace("__SCOPE__", scope)
+
+
 def render_flow_client(scope: str) -> str:
     text = (ASSET_ROOT / "ChangeAssuranceFlowClient.js").read_text()
     initialize = f'''initialize: function () {{
@@ -180,6 +185,7 @@ def write_sdk_sources(output: Path, scope: str) -> None:
     (server / "ForwardApiClient.server.js").write_text(render_forward_client(scope))
     (server / "ForwardPathCheck.server.js").write_text(render_path_check(scope))
     (server / "ForwardMapsLookup.server.js").write_text(render_maps_lookup(scope))
+    (server / "ForwardPredict.server.js").write_text(render_predict(scope))
 
 
 def apply_scope_id(output: Path, scope_id: str) -> None:

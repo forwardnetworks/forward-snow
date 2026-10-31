@@ -32,6 +32,12 @@ ScriptInclude({
     script: Now.include('../server/ForwardMapsLookup.server.js'),
 })
 ScriptInclude({
+    $id: Now.ID['forward_predict'], name: 'ForwardPredict',
+    apiName: '__SCOPE__.ForwardPredict', active: true, clientCallable: false,
+    accessibleFrom: 'package_private', protectionPolicy: 'read',
+    script: Now.include('../server/ForwardPredict.server.js'),
+})
+ScriptInclude({
     $id: Now.ID['forward_path_check'], name: 'ForwardPathCheck',
     apiName: '__SCOPE__.ForwardPathCheck', active: true, clientCallable: false,
     accessibleFrom: 'package_private', protectionPolicy: 'read',

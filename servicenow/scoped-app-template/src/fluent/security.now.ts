@@ -37,3 +37,35 @@ Acl({
     type: 'record', table: '__SCOPE___validation', operation: 'write', decisionType: 'allow',
     roles: [adminRole, operatorRole], adminOverrides: true,
 })
+Acl({
+    $id: Now.ID['predict_proposal_read_acl'],
+    type: 'record', table: '__SCOPE___predict_proposal', operation: 'read', decisionType: 'allow',
+    roles: [adminRole, operatorRole], adminOverrides: true,
+    description: 'Proposed commands can hold secrets: the auditor role has no access, and a user needs write access to the change',
+    script: "var change = new GlideRecord('change_request'); answer = !!current.getValue('change') && change.get(current.getValue('change')) && change.canWrite();",
+})
+Acl({
+    $id: Now.ID['predict_proposal_create_acl'],
+    type: 'record', table: '__SCOPE___predict_proposal', operation: 'create', decisionType: 'allow',
+    roles: [adminRole, operatorRole], adminOverrides: true,
+    script: "var change = new GlideRecord('change_request'); answer = !!current.getValue('change') && change.get(current.getValue('change')) && change.canWrite();",
+})
+Acl({
+    $id: Now.ID['predict_proposal_write_acl'],
+    type: 'record', table: '__SCOPE___predict_proposal', operation: 'write', decisionType: 'allow',
+    roles: [adminRole, operatorRole], adminOverrides: true,
+    script: "var change = new GlideRecord('change_request'); answer = !!current.getValue('change') && change.get(current.getValue('change')) && change.canWrite();",
+})
+Acl({
+    $id: Now.ID['predict_proposal_delete_acl'],
+    type: 'record', table: '__SCOPE___predict_proposal', operation: 'delete', decisionType: 'allow',
+    roles: [adminRole, operatorRole], adminOverrides: true,
+    script: "var change = new GlideRecord('change_request'); answer = !!current.getValue('change') && change.get(current.getValue('change')) && change.canWrite();",
+})
+// Runs are written by script only. No create, write or delete rule exists on purpose: an editable change-set id
+// would let a user make cleanup delete an arbitrary change set.
+Acl({
+    $id: Now.ID['predict_run_read_acl'],
+    type: 'record', table: '__SCOPE___predict_run', operation: 'read', decisionType: 'allow',
+    roles: [adminRole, auditorRole, operatorRole], adminOverrides: true,
+})

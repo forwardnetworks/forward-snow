@@ -90,6 +90,46 @@ export const __SCOPE___validation = Table({
     autoNumber: { prefix: 'FPV', number: 1, numberOfDigits: 7 },
 })
 
+export const __SCOPE___predict_proposal = Table({
+    name: '__SCOPE___predict_proposal',
+    label: 'Forward Predict Proposal',
+    // Proposed commands can hold keys and SNMP communities: no audit, history, journal or web service access.
+    audit: false,
+    allowWebServiceAccess: false,
+    accessibleFrom: 'package_private',
+    schema: {
+        change: ReferenceColumn({ label: 'Change Request', referenceTable: 'change_request', mandatory: true, cascadeRule: 'delete' }),
+        device_name: StringColumn({ label: 'Forward Device Name', maxLength: 128, mandatory: true }),
+        commands: StringColumn({ label: 'Proposed CLI Commands', maxLength: 60000, mandatory: true, attributes: { no_audit: true } }),
+    },
+})
+
+export const __SCOPE___predict_run = Table({
+    name: '__SCOPE___predict_run',
+    label: 'Forward Predict Run',
+    audit: false,
+    allowWebServiceAccess: false,
+    accessibleFrom: 'package_private',
+    schema: {
+        // cascadeRule none: a deleted change must not take the change-set ids with it before cleanup has used them.
+        change: ReferenceColumn({ label: 'Change Request', referenceTable: 'change_request', cascadeRule: 'none' }),
+        // The change sys_id while the run is active, the run's own sys_id once it ends. Unique, so only one run is active.
+        claim: StringColumn({ label: 'Active Claim', maxLength: 32, unique: true, mandatory: true }),
+        outcome: StringColumn({
+            label: 'Outcome',
+            default: 'starting',
+            choices: { starting: 'Starting', pending: 'Pending', answered: 'Answered', failed: 'Failed' },
+        }),
+        cleanup: StringColumn({ label: 'Cleanup', default: 'open', choices: { open: 'Open', cleaned: 'Cleaned' } }),
+        change_set_id: StringColumn({ label: 'Forward Change Set ID', maxLength: 64 }),
+        predicted_snapshot_id: StringColumn({ label: 'Predicted Snapshot ID', maxLength: 64 }),
+        network_id: StringColumn({ label: 'Forward Network ID', maxLength: 64 }),
+        started_ms: StringColumn({ label: 'Started (epoch ms)', maxLength: 20 }),
+        revision: IntegerColumn({ label: 'Proposal Revision' }),
+        detail: StringColumn({ label: 'Detail', maxLength: 200 }),
+    },
+})
+
 export const change_request = Table({
     augments: 'change_request',
     schema: {
@@ -109,6 +149,7 @@ export const change_request = Table({
                 failed: 'Failed',
             },
         }),
+        __SCOPE___predict_revision: IntegerColumn({ label: 'Forward Predict Proposal Revision', default: 0 }),
         __SCOPE___assurance_decision: StringColumn({
             label: 'Forward Assurance Decision',
             default: 'pending',

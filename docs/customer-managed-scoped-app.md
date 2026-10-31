@@ -85,3 +85,22 @@ Set lifecycle management for the same application.
 - Local changes are a customer fork. Forward tests the unmodified release kit; fork reconciliation is an explicit
   professional-services or customer engineering activity.
 - Reinstall flags that can remove instance metadata are prohibited from routine deployment.
+
+## Forward Predict (advisory, off by default)
+
+Predict asks Forward what the commands proposed for a Change Request would do, in a dedicated network, and shows the
+outcome. Nothing in the assurance gate, close guard or verdict reads it.
+
+- Enable it only after naming a dedicated network in `forward.predict_network_id` (never the production network) and
+  setting `forward.predict_enabled` to true. Every start also needs an explicit confirmation.
+- The Forward API credential bound to the `Forward API` alias must be allowed to create change sets in that network.
+  Use a separate alias and connection if the read-only path-search credential should stay read-only.
+- Proposed commands can contain keys and SNMP communities. They live in the `Forward Predict Proposal` table, which has
+  no audit, journal or web service access and is readable only by users who can change the Change Request. They are
+  deleted when the change closes or is cancelled. ServiceNow's outbound HTTP log can still record request bodies if an
+  administrator raises `glide.outbound_http_log.override.level`; leave it at its default while Predict is on.
+- Cleanup deletes the Forward change set when a change closes, is cancelled or is deleted, and before a new prediction.
+  Run it for every open prediction before uninstalling the application, because the change-set ids are removed with
+  the tables. Change sets are tagged `forward-change-assurance` in Forward, so leftovers can also be found there.
+- The change-set routes are not part of Forward's published API and have not been verified against a live Forward from
+  this application. Treat the first run as a test, in a non-customer organisation with a Predict licence.

@@ -37,6 +37,92 @@ ForwardApiClient.prototype = {
     return { maps: maps, truncated: items.length > 1000 };
   },
 
+  // ---- Change sets and Predict (unpublished Forward routes; shapes follow the forward-python-sdk spec) ----
+
+  createChangeSet: function (networkId, args) {
+    var value = args || {};
+    var body = { name: this._text(value.name, "name", 128), snapshotId: this._identifier(value.snapshotId, "snapshotId") };
+    if (value.description) body.description = this._text(value.description, "description", 256);
+    if (value.tags && value.tags.length) body.tags = value.tags.map(function (tag) { return String(tag).substring(0, 64); });
+    var created = this._request("post", this._changeSets(networkId), null, { json: body });
+    var id = created && created.id ? String(created.id) : "";
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw this._failure("invalid_response", 200, "Forward did not return a usable change set id");
+    return id;
+  },
+
+  // Validation stores nothing. Only the number of errors is returned: the error text can echo the commands.
+  validateCommands: function (networkId, changeSetId, deviceName, commands) {
+    var path = this._changeSets(networkId) + "/" + this._identifier(changeSetId, "changeSetId") + "/devices/" +
+      this._device(deviceName) + "/commands";
+    var body = { commands: this._commands(commands), cursorLineNum: 1, cursorColumnNum: 1 };
+    var result = this._request("post", path, { action: "validate" }, { json: body });
+    var errors = result && Array.isArray(result.commandErrors) ? result.commandErrors : [];
+    return { errorCount: errors.length };
+  },
+
+  setCommands: function (networkId, changeSetId, deviceName, commands) {
+    var path = this._changeSets(networkId) + "/" + this._identifier(changeSetId, "changeSetId") + "/draft/devices/" +
+      this._device(deviceName) + "/commands";
+    this._request("put", path, null, { text: this._commands(commands) });
+  },
+
+  commitChangeSet: function (networkId, changeSetId, note) {
+    var path = this._changeSets(networkId) + "/" + this._identifier(changeSetId, "changeSetId") + "/commits";
+    this._request("post", path, { note: this._note(note) }, null);
+  },
+
+  // Returns the predicted snapshot id. Forward needs a non-blank note.
+  predict: function (networkId, changeSetId, note) {
+    var path = this._changeSets(networkId) + "/" + this._identifier(changeSetId, "changeSetId");
+    var result = this._request("post", path, { action: "predict", note: this._text(note, "note", 200) }, null);
+    var id = result && result.id ? String(result.id) : "";
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw this._failure("invalid_response", 200, "Forward did not return a usable predicted snapshot id");
+    return id;
+  },
+
+  predictedSnapshots: function (networkId, changeSetId) {
+    var path = this._changeSets(networkId) + "/" + this._identifier(changeSetId, "changeSetId") + "/predicted-snapshots";
+    var body = this._get(path, null);
+    var items = Array.isArray(body) ? body : body && Array.isArray(body.snapshots) ? body.snapshots : null;
+    if (!items) throw this._failure("invalid_response", 200, "Forward predicted snapshot list was not an array");
+    var snapshots = [];
+    for (var i = 0; i < items.length && i < 100; i++) {
+      var item = items[i] || {};
+      snapshots.push({ id: String(item.id || ""), state: String(item.state || "").toUpperCase() });
+    }
+    return snapshots;
+  },
+
+  // True when the change set is gone (deleted now, or already absent).
+  deleteChangeSet: function (networkId, changeSetId) {
+    this._request("delete", this._changeSets(networkId) + "/" + this._identifier(changeSetId, "changeSetId"), null, { allow404: true });
+    return true;
+  },
+
+  _changeSets: function (networkId) {
+    return "/networks/" + this._identifier(networkId, "networkId") + "/change-sets";
+  },
+
+  // Forward refuses a blank note on commit and predict.
+  _note: function (value) {
+    var text = String(value == null ? "" : value).replace(/^\s+|\s+$/g, "");
+    return this._text(text, "note", 200);
+  },
+
+  _device: function (name) {
+    var text = String(name == null ? "" : name);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(text)) throw this._failure("invalid_request", 0, "deviceName is invalid");
+    return encodeURIComponent(text);
+  },
+
+  _commands: function (commands) {
+    var text = String(commands == null ? "" : commands);
+    if (!text.replace(/\s+/g, "") || this._utf8ByteLength(text) > 65536) {
+      throw this._failure("invalid_request", 0, "commands are empty or too long");
+    }
+    return text;
+  },
+
   listSnapshots: function (networkId) {
     var query = { state: "PROCESSED", includeArchived: "false", limit: String(this._maxSnapshots) };
     var body = this._get("/networks/" + this._identifier(networkId, "networkId") + "/snapshots", query);
@@ -114,12 +200,27 @@ ForwardApiClient.prototype = {
   },
 
   _get: function (relativePath, query) {
+    return this._request("get", relativePath, query, null);
+  },
+
+  // Writes never carry a body into the REST log (log level "basic"), and a failed write is never retried here.
+  // options: { json: object } or { text: string }, plus { allow404: true } for deletes.
+  _request: function (method, relativePath, query, options) {
+    var opts = options || {};
     var rm = new sn_ws.RESTMessageV2();
-    rm.setHttpMethod("get");
+    rm.setHttpMethod(method);
     rm.setEndpoint(this._origin + "/api" + relativePath);
     rm.setBasicAuth(this._username, this._password);
     rm.setHttpTimeout(this._timeoutMs);
     rm.setRequestHeader("Accept", "application/json");
+    if (method !== "get") rm.setLogLevel("basic");
+    if (opts.json !== undefined) {
+      rm.setRequestHeader("Content-Type", "application/json");
+      rm.setRequestBody(JSON.stringify(opts.json));
+    } else if (opts.text !== undefined) {
+      rm.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+      rm.setRequestBody(String(opts.text));
+    }
     var keys = query ? Object.keys(query) : [];
     for (var i = 0; i < keys.length; i++) rm.setQueryParameter(keys[i], String(query[keys[i]]));
     var response;
@@ -130,6 +231,7 @@ ForwardApiClient.prototype = {
     }
     var status = response.getStatusCode();
     var text = String(response.getBody() || "");
+    if (opts.allow404 && status === 404) return null;
     if (status < 200 || status >= 300) throw this._failure(this._kindFor(status), status, "Forward API returned " + status);
     if (this._utf8ByteLength(text) > this._maxResponseBytes) {
       throw this._failure("invalid_response", status, "Forward API response is too large");

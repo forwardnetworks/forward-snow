@@ -264,3 +264,93 @@ export const listForwardMaps = Action(
         })
     },
 )
+
+export const startForwardPrediction = Action(
+    {
+        $id: Now.ID['start_forward_prediction_action'],
+        name: 'Start Forward Prediction',
+        internalName: 'start_forward_prediction',
+        description: 'Ask Forward Predict about the commands proposed for a Change Request. Writes a change set to Forward, so it needs forward.predict_enabled and confirm set to true. Advisory only. Run the calling flow as the user, not as System.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: {
+        change_sys_id: StringColumn({ label: 'Change Request sys_id', mandatory: true, maxLength: 32 }),
+        confirm: StringColumn({ label: 'Confirm (must be true)', mandatory: true, maxLength: 5 }),
+        },
+        outputs: {
+            outcome: StringColumn({ label: 'Outcome', maxLength: 16 }),
+            predicted_snapshot_id: StringColumn({ label: 'Predicted Snapshot ID', maxLength: 64 }),
+            run_id: StringColumn({ label: 'Run sys_id', maxLength: 32 }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['start_forward_prediction_script'], label: 'Start Forward Prediction' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/start-forward-prediction.server.js'),
+                inputVariables: {
+                    change_sys_id: { label: 'Change Request sys_id', value: wfa.dataPill(params.inputs.change_sys_id, 'string') },
+                    confirm: { label: 'Confirm (must be true)', value: wfa.dataPill(params.inputs.confirm, 'string') },
+                },
+                outputVariables: {
+                    outcome: StringColumn({ label: 'Outcome', maxLength: 16 }),
+                    predicted_snapshot_id: StringColumn({ label: 'Predicted Snapshot ID', maxLength: 64 }),
+                    run_id: StringColumn({ label: 'Run sys_id', maxLength: 32 }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            outcome: wfa.dataPill(step.outcome, 'string'),
+            predicted_snapshot_id: wfa.dataPill(step.predicted_snapshot_id, 'string'),
+            run_id: wfa.dataPill(step.run_id, 'string'),
+        })
+    },
+)
+
+export const refreshForwardPrediction = Action(
+    {
+        $id: Now.ID['refresh_forward_prediction_action'],
+        name: 'Refresh Forward Prediction',
+        internalName: 'refresh_forward_prediction',
+        description: 'Check whether the Forward prediction for a Change Request has finished. Reads Forward and updates the run. Run the calling flow as the user, not as System.',
+        category: 'Forward Change Assurance',
+        access: 'public',
+        protectionPolicy: 'read',
+        inputs: {
+        change_sys_id: StringColumn({ label: 'Change Request sys_id', mandatory: true, maxLength: 32 }),
+        },
+        outputs: {
+            outcome: StringColumn({ label: 'Outcome', maxLength: 16 }),
+            predicted_snapshot_id: StringColumn({ label: 'Predicted Snapshot ID', maxLength: 64 }),
+            stale: StringColumn({ label: 'Proposal changed since prediction', maxLength: 5 }),
+        },
+    },
+    (params) => {
+        const step = wfa.actionStep(
+            actionStep.script,
+            { $id: Now.ID['refresh_forward_prediction_script'], label: 'Refresh Forward Prediction' },
+            {
+                required_run_time: 'instance',
+                script: Now.include('../server/actions/refresh-forward-prediction.server.js'),
+                inputVariables: {
+                    change_sys_id: { label: 'Change Request sys_id', value: wfa.dataPill(params.inputs.change_sys_id, 'string') },
+                },
+                outputVariables: {
+                    outcome: StringColumn({ label: 'Outcome', maxLength: 16 }),
+                    predicted_snapshot_id: StringColumn({ label: 'Predicted Snapshot ID', maxLength: 64 }),
+                    stale: StringColumn({ label: 'Proposal changed since prediction', maxLength: 5 }),
+                },
+                errorHandlingType: 'stop_the_action',
+            },
+        )
+        wfa.assignActionOutputs(params.outputs, {
+            outcome: wfa.dataPill(step.outcome, 'string'),
+            predicted_snapshot_id: wfa.dataPill(step.predicted_snapshot_id, 'string'),
+            stale: wfa.dataPill(step.stale, 'string'),
+        })
+    },
+)

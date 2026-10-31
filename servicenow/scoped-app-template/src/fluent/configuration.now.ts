@@ -53,3 +53,15 @@ Property({
     $id: Now.ID['forward_maps_enabled'], name: '__SCOPE__.forward.maps_enabled', type: 'boolean', value: true,
     description: 'Show Forward Network Maps that match a Change Request; turn off to stop reading maps', roles: { read: [adminRole], write: [adminRole] },
 })
+Property({
+    $id: Now.ID['forward_predict_enabled'], name: '__SCOPE__.forward.predict_enabled', type: 'boolean', value: false,
+    description: 'Allow Forward Predict to create change sets in the predict network. Off by default; every start also needs an explicit confirmation', roles: { read: [adminRole], write: [adminRole] },
+})
+Property({
+    $id: Now.ID['forward_predict_network_id'], name: '__SCOPE__.forward.predict_network_id', type: 'string', value: '',
+    description: 'Forward network ID where Predict change sets are created. Use a dedicated network, not the production one; blank refuses Predict', roles: { read: [adminRole], write: [adminRole] },
+})
+Property({
+    $id: Now.ID['forward_predict_max_devices'], name: '__SCOPE__.forward.predict_max_devices', type: 'integer', value: 10,
+    description: 'Maximum devices one Forward Predict proposal may cover', roles: { read: [adminRole], write: [adminRole] },
+})

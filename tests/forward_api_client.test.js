@@ -46,6 +46,8 @@ global.sn_ws = {
     setHttpTimeout(value) { this.record.timeout = value; }
     setRequestHeader(name, value) { this.record.headers[name] = value; }
     setQueryParameter(name, value) { this.record.query[name] = value; }
+    setLogLevel(value) { this.record.logLevel = value; }
+    setRequestBody(value) { this.record.body = value; }
     execute() {
       const next = world.responses.shift();
       if (next instanceof Error) throw next;
@@ -262,4 +264,120 @@ test("lists Network Maps as id, name and pinned only, and flags a list past the 
   reset();
   reply(200, []);
   assert.throws(() => new ForwardApiClient().listMaps("1"), (error) => error.kind === "invalid_response");
+});
+
+const NET = "235937";
+const CS = "CHG-7";
+const COMMANDS = "interface Ethernet1\n description secret-community-xyz\n";
+
+test("createChangeSet posts name and base snapshot to the network's change-sets route and returns the id", () => {
+  reset();
+  reply(200, { id: CS });
+  const id = new ForwardApiClient().createChangeSet(NET, { name: "CHG0001-run1", snapshotId: "1347066", tags: ["fca"] });
+  assert.equal(id, CS);
+  const request = world.requests[0];
+  assert.equal(request.method, "post");
+  assert.equal(request.endpoint, "https://fwd.example.com/api/networks/235937/change-sets");
+  assert.deepEqual(JSON.parse(request.body), { name: "CHG0001-run1", snapshotId: "1347066", tags: ["fca"] });
+});
+
+test("every write keeps request bodies out of the REST log and reads do not need to", () => {
+  reset();
+  reply(200, { commandErrors: [] });
+  reply(200, "");
+  reply(200, "");
+  reply(200, { id: "77" });
+  reply(204, "");
+  const client = new ForwardApiClient();
+  client.validateCommands(NET, CS, "edge-1", COMMANDS);
+  client.setCommands(NET, CS, "edge-1", COMMANDS);
+  client.commitChangeSet(NET, CS, "CHG0001 run1");
+  client.predict(NET, CS, "CHG0001 run1");
+  client.deleteChangeSet(NET, CS);
+  assert.deepEqual(world.requests.map((r) => r.logLevel), ["basic", "basic", "basic", "basic", "basic"]);
+});
+
+test("validateCommands posts the commands in the body and returns only a count", () => {
+  reset();
+  reply(200, { commandErrors: [{ message: "bad: description secret-community-xyz" }, { message: "x" }] });
+  const result = new ForwardApiClient().validateCommands(NET, CS, "edge-1", COMMANDS);
+  assert.deepEqual(result, { errorCount: 2 });
+  const request = world.requests[0];
+  assert.equal(request.endpoint, "https://fwd.example.com/api/networks/235937/change-sets/CHG-7/devices/edge-1/commands");
+  assert.equal(request.query.action, "validate");
+  assert.equal(JSON.parse(request.body).commands, COMMANDS);
+  assert.ok(!JSON.stringify(result).includes("secret"));
+});
+
+test("setCommands puts the text itself as the body", () => {
+  reset();
+  reply(200, "");
+  new ForwardApiClient().setCommands(NET, CS, "edge-1", COMMANDS);
+  const request = world.requests[0];
+  assert.equal(request.method, "put");
+  assert.equal(request.endpoint, "https://fwd.example.com/api/networks/235937/change-sets/CHG-7/draft/devices/edge-1/commands");
+  assert.equal(request.body, COMMANDS);
+  assert.match(request.headers["Content-Type"], /^text\/plain/);
+});
+
+test("commit and predict send a required non-blank note and predict returns the snapshot id", () => {
+  reset();
+  reply(200, {});
+  reply(200, { id: "1400001" });
+  const client = new ForwardApiClient();
+  client.commitChangeSet(NET, CS, "CHG0001 run1");
+  assert.equal(client.predict(NET, CS, "CHG0001 run1"), "1400001");
+  assert.equal(world.requests[0].query.note, "CHG0001 run1");
+  assert.equal(world.requests[1].query.action, "predict");
+  assert.equal(world.requests[1].query.note, "CHG0001 run1");
+  for (const bad of ["", "   "]) {
+    reset();
+    assert.throws(() => new ForwardApiClient().commitChangeSet(NET, CS, bad), (e) => e.kind === "invalid_request");
+  }
+  reset();
+  reply(200, {});
+  assert.throws(() => new ForwardApiClient().predict(NET, CS, "n"), (e) => e.kind === "invalid_response");
+});
+
+test("deleteChangeSet treats 404 as already gone and any other failure as an error", () => {
+  reset();
+  reply(404, "");
+  assert.equal(new ForwardApiClient().deleteChangeSet(NET, CS), true);
+  reset();
+  reply(500, "");
+  assert.throws(() => new ForwardApiClient().deleteChangeSet(NET, CS), (e) => e.kind === "server");
+});
+
+test("predictedSnapshots reads the change set's list, including failed states", () => {
+  reset();
+  reply(200, [{ id: "1", state: "processed" }, { id: "2", state: "FAILED" }]);
+  const result = new ForwardApiClient().predictedSnapshots(NET, CS);
+  assert.deepEqual(result, [{ id: "1", state: "PROCESSED" }, { id: "2", state: "FAILED" }]);
+  assert.equal(world.requests[0].endpoint, "https://fwd.example.com/api/networks/235937/change-sets/CHG-7/predicted-snapshots");
+});
+
+test("device names allow dots and are encoded; unsafe ones and oversize commands are refused before any call", () => {
+  reset();
+  reply(200, "");
+  new ForwardApiClient().setCommands(NET, CS, "edge-1.lab:1", "x");
+  assert.ok(world.requests[0].endpoint.includes("/draft/devices/edge-1.lab%3A1/commands"), world.requests[0].endpoint);
+  for (const device of ["", "a/b", "../x", "a b"]) {
+    reset();
+    assert.throws(() => new ForwardApiClient().setCommands(NET, CS, device, "x"), (e) => e.kind === "invalid_request");
+    assert.equal(world.requests.length, 0);
+  }
+  reset();
+  assert.throws(() => new ForwardApiClient().setCommands(NET, CS, "edge-1", "a".repeat(70000)), (e) => e.kind === "invalid_request");
+  assert.throws(() => new ForwardApiClient().setCommands(NET, CS, "edge-1", "  \n"), (e) => e.kind === "invalid_request");
+});
+
+test("ids Forward returns are checked before they are stored or used in later paths", () => {
+  for (const bad of ["../x", "a b", "", "a".repeat(80)]) {
+    reset();
+    reply(200, { id: bad });
+    assert.throws(() => new ForwardApiClient().createChangeSet(NET, { name: "n", snapshotId: "1" }), (e) => e.kind === "invalid_response");
+    reset();
+    reply(200, { id: bad });
+    assert.throws(() => new ForwardApiClient().predict(NET, CS, "n"), (e) => e.kind === "invalid_response");
+  }
 });
