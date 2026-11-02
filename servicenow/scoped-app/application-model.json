@@ -1,0 +1,511 @@
+{
+  "schemaVersion": "forward-servicenow-scoped-app-model/v1",
+  "identity": {
+    "displayName": "Forward Change Assurance",
+    "packageName": "forward-change-assurance",
+    "vendorPrefix": null,
+    "scope": null,
+    "scopeStatus": "pending_build_partner_registration",
+    "version": "0.1.0"
+  },
+  "distributionEditions": [
+    {
+      "name": "customer_managed",
+      "availableBeforeForwardStoreCertification": true,
+      "scopeOwner": "customer",
+      "promotionChannel": "customer_application_repository",
+      "sourceDelivery": "versioned_sdk_source_kit"
+    },
+    {
+      "name": "forward_store",
+      "availableBeforeForwardStoreCertification": false,
+      "scopeOwner": "forward",
+      "promotionChannel": "servicenow_store",
+      "sourceDelivery": "certified_store_application"
+    }
+  ],
+  "platform": {
+    "sourceOfTruth": "servicenow-sdk-fluent",
+    "requiredTables": [
+      "change_request",
+      "sys_attachment"
+    ],
+    "integrationHubSpokesRequired": false,
+    "runtimeCredentialValuesPackaged": false
+  },
+  "roles": [
+    {
+      "logicalName": "admin",
+      "purpose": "Configure aliases and policy"
+    },
+    {
+      "logicalName": "operator",
+      "purpose": "Start and complete assurance from an authorized Change Request"
+    },
+    {
+      "logicalName": "evidence_writer",
+      "purpose": "Submit bounded checksum-validated evidence to the scripted REST resource"
+    },
+    {
+      "logicalName": "auditor",
+      "purpose": "Read ledger, decision, work-note marker, and retained evidence"
+    }
+  ],
+  "tables": [
+    {
+      "logicalName": "assurance_ledger",
+      "extends": "task",
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "evidence_writer"
+      ],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": [
+        "idempotency_key"
+      ]
+    },
+    {
+      "logicalName": "path_validation",
+      "extends": "task",
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "operator"
+      ],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": []
+    },
+    {
+      "logicalName": "predict_proposal",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "operator"
+      ],
+      "readRoles": [
+        "admin",
+        "operator"
+      ],
+      "uniqueKeys": []
+    },
+    {
+      "logicalName": "predict_run",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": [
+        "claim"
+      ]
+    },
+    {
+      "logicalName": "criterion",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [
+        "admin",
+        "operator"
+      ],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": []
+    },
+    {
+      "logicalName": "validation_run",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": [
+        "claim"
+      ]
+    },
+    {
+      "logicalName": "validation_result",
+      "extends": null,
+      "webServiceAccess": false,
+      "writeRoles": [],
+      "readRoles": [
+        "admin",
+        "operator",
+        "auditor"
+      ],
+      "uniqueKeys": []
+    }
+  ],
+  "changeRequestCorrelation": [
+    {
+      "logicalName": "assurance_run_id",
+      "type": "string",
+      "maximumLength": 64
+    },
+    {
+      "logicalName": "assurance_status",
+      "type": "choice",
+      "values": [
+        "not_started",
+        "start_queued",
+        "start_running",
+        "baseline_captured",
+        "complete_queued",
+        "complete_running",
+        "completed",
+        "blocked",
+        "failed"
+      ]
+    },
+    {
+      "logicalName": "assurance_decision",
+      "type": "choice",
+      "values": [
+        "pending",
+        "pass",
+        "warn",
+        "fail"
+      ]
+    },
+    {
+      "logicalName": "predict_revision",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "logicalName": "validation_status",
+      "type": "choice",
+      "values": [
+        "not_run",
+        "pass",
+        "fail",
+        "error",
+        "incomplete",
+        "stale"
+      ]
+    },
+    {
+      "logicalName": "validation_score",
+      "type": "integer"
+    },
+    {
+      "logicalName": "validation_snapshot_id",
+      "type": "string",
+      "maximumLength": 64
+    },
+    {
+      "logicalName": "criteria_revision",
+      "type": "integer",
+      "default": 0
+    }
+  ],
+  "connectionAliases": [
+    {
+      "logicalName": "assurance_worker",
+      "required": true,
+      "authentication": "customer_bound_credential_alias",
+      "allowedOrigins": "exact_https_origin",
+      "credentialValuesPackaged": false
+    },
+    {
+      "logicalName": "forward_api",
+      "required": false,
+      "authentication": "customer_bound_credential_alias",
+      "allowedOrigins": "exact_https_origin",
+      "credentialValuesPackaged": false
+    }
+  ],
+  "properties": [
+    {
+      "logicalName": "assurance.max_payload_bytes",
+      "type": "integer",
+      "secret": false,
+      "default": 262144,
+      "minimum": 1024,
+      "maximum": 1048576
+    },
+    {
+      "logicalName": "assurance.worker_timeout_ms",
+      "type": "integer",
+      "secret": false,
+      "default": 30000,
+      "minimum": 1000,
+      "maximum": 60000
+    },
+    {
+      "logicalName": "assurance.worker_max_payload_bytes",
+      "type": "integer",
+      "secret": false,
+      "default": 524288,
+      "minimum": 1024,
+      "maximum": 1048576
+    },
+    {
+      "logicalName": "assurance.enforced_close_states",
+      "type": "string",
+      "secret": false,
+      "default": "3"
+    },
+    {
+      "logicalName": "forward.timeout_ms",
+      "type": "integer",
+      "secret": false,
+      "default": 30000,
+      "minimum": 1000,
+      "maximum": 120000
+    },
+    {
+      "logicalName": "forward.max_response_bytes",
+      "type": "integer",
+      "secret": false,
+      "default": 1048576,
+      "minimum": 16384,
+      "maximum": 4194304
+    },
+    {
+      "logicalName": "forward.max_path_results",
+      "type": "integer",
+      "secret": false,
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100
+    },
+    {
+      "logicalName": "forward.network_id",
+      "type": "string",
+      "secret": false,
+      "default": ""
+    },
+    {
+      "logicalName": "forward.maps_enabled",
+      "type": "boolean",
+      "secret": false,
+      "default": true
+    },
+    {
+      "logicalName": "forward.predict_enabled",
+      "type": "boolean",
+      "secret": false,
+      "default": false
+    },
+    {
+      "logicalName": "forward.predict_network_id",
+      "type": "string",
+      "secret": false,
+      "default": ""
+    },
+    {
+      "logicalName": "forward.predict_max_devices",
+      "type": "integer",
+      "secret": false,
+      "default": 10,
+      "minimum": 1,
+      "maximum": 50
+    },
+    {
+      "logicalName": "forward.validation_max_criteria",
+      "type": "integer",
+      "secret": false,
+      "default": 20,
+      "minimum": 1,
+      "maximum": 100
+    }
+  ],
+  "scriptIncludes": [
+    {
+      "logicalName": "ChangeAssuranceContract",
+      "clientCallable": false,
+      "purpose": "Strict parsing, bounds, canonical hashes, and work-note rendering"
+    },
+    {
+      "logicalName": "ChangeAssuranceService",
+      "clientCallable": false,
+      "purpose": "Idempotent ledger, attachment, and Change Request publication"
+    },
+    {
+      "logicalName": "ChangeAssuranceFlowClient",
+      "clientCallable": false,
+      "purpose": "Bounded worker calls through packaged connection and credential aliases"
+    },
+    {
+      "logicalName": "ChangeAssuranceCloseGuard",
+      "clientCallable": false,
+      "purpose": "Evaluate authoritative ServiceNow, Forward, and Dynatrace evidence before closeout"
+    },
+    {
+      "logicalName": "ForwardApiClient",
+      "clientCallable": false,
+      "purpose": "Forward API calls through the bound Forward API alias, with typed errors and bounded summaries. Reads, plus change-set writes for Predict"
+    },
+    {
+      "logicalName": "ForwardPathCheck",
+      "clientCallable": false,
+      "purpose": "Runs a Forward path search for a validation record and records a pass, fail or error verdict with the snapshot used"
+    },
+    {
+      "logicalName": "ForwardMapsLookup",
+      "clientCallable": false,
+      "purpose": "Finds Forward Network Maps whose name matches a Change Request's configuration item, location or service; read only"
+    },
+    {
+      "logicalName": "ForwardPredict",
+      "clientCallable": false,
+      "purpose": "Advisory Forward Predict lifecycle: validate, stage, commit and predict a proposal in a dedicated network, then refresh and clean up; writes to Forward only after opt-in and confirmation"
+    },
+    {
+      "logicalName": "ForwardValidation",
+      "clientCallable": false,
+      "purpose": "Binds validation criteria to saved Forward query versions and runs them against a snapshot, recording counts, verdicts and a score; read only, no row content stored"
+    }
+  ],
+  "businessRules": [
+    {
+      "logicalName": "change_assurance_close_guard",
+      "table": "change_request",
+      "when": "before_update",
+      "purpose": "Abort assurance-bound close transitions until all published evidence passes"
+    },
+    {
+      "logicalName": "predict_proposal_revision",
+      "table": "predict_proposal",
+      "when": "after_insert_update_delete",
+      "purpose": "Count proposal changes so an earlier prediction shows as stale"
+    },
+    {
+      "logicalName": "predict_close_cleanup",
+      "table": "change_request",
+      "when": "async_update",
+      "purpose": "Delete the Forward change set and proposals after close or cancel; best effort"
+    },
+    {
+      "logicalName": "predict_delete_cleanup",
+      "table": "change_request",
+      "when": "before_delete",
+      "purpose": "Delete the Forward change set of a deleted change; best effort"
+    },
+    {
+      "logicalName": "criterion_binding_reset",
+      "table": "criterion",
+      "when": "before_insert_update",
+      "purpose": "Clear a pinned query version that was not set by Bind or whose path changed, and keep a criterion on its change"
+    },
+    {
+      "logicalName": "criterion_revision",
+      "table": "criterion",
+      "when": "after_insert_update_delete",
+      "purpose": "Count criteria changes and mark an earlier validation stale"
+    }
+  ],
+  "restResources": [
+    {
+      "logicalName": "change_assurance_evidence",
+      "method": "POST",
+      "relativePath": "/changes/{change_sys_id}/evidence",
+      "authenticationRequired": true,
+      "requiredRole": "evidence_writer",
+      "checksumHeaderRequired": true
+    }
+  ],
+  "flowActions": [
+    {
+      "logicalName": "start_forward_change_assurance",
+      "operation": "start"
+    },
+    {
+      "logicalName": "get_forward_change_assurance_status",
+      "operation": "status"
+    },
+    {
+      "logicalName": "complete_forward_change_assurance",
+      "operation": "complete"
+    },
+    {
+      "logicalName": "refresh_forward_change_assurance",
+      "operation": "refresh"
+    },
+    {
+      "logicalName": "check_forward_path",
+      "operation": "path_check"
+    },
+    {
+      "logicalName": "list_forward_maps",
+      "operation": "maps"
+    },
+    {
+      "logicalName": "start_forward_prediction",
+      "operation": "predict_start"
+    },
+    {
+      "logicalName": "refresh_forward_prediction",
+      "operation": "predict_refresh"
+    },
+    {
+      "logicalName": "check_forward_capabilities",
+      "operation": "capabilities"
+    },
+    {
+      "logicalName": "bind_forward_criteria",
+      "operation": "validation_bind"
+    },
+    {
+      "logicalName": "run_forward_validation",
+      "operation": "validation_run"
+    }
+  ],
+  "subflows": [
+    {
+      "logicalName": "capture_forward_baseline",
+      "terminalStates": [
+        "baseline_captured",
+        "blocked",
+        "failed"
+      ]
+    },
+    {
+      "logicalName": "evaluate_change_completion",
+      "terminalStates": [
+        "completed",
+        "blocked",
+        "failed"
+      ]
+    },
+    {
+      "logicalName": "publish_assurance_decision",
+      "terminalStates": [
+        "published",
+        "failed"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "logicalName": "forward_change_assurance_gate",
+      "trigger": "authorized_change_request_transition",
+      "autoApprove": false,
+      "autoRemediate": false,
+      "changeExecutorOwned": false
+    }
+  ],
+  "automatedTests": [
+    "install_and_default_acl",
+    "worker_alias_readiness"
+  ]
+}
