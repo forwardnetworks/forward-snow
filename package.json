@@ -6,6 +6,6 @@
     "validate": "python3 -m py_compile scripts/*.py && npm test"
   },
   "devDependencies": {
-    "playwright": "^1.61.1"
+    "playwright": "^1.64.1"
   }
 }
